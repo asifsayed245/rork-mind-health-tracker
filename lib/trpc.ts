@@ -7,25 +7,31 @@ import { supabase } from "@/lib/supabase";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // Force localhost for development when backend is running locally
-  if (__DEV__) {
+  // Check for explicit API base URL (rork.com sets this)
+  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    console.log('tRPC baseUrl (rork.com backend):', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
+    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  }
+
+  // For rork.com web environment - use same origin for backend routing
+  if (typeof window !== 'undefined' && window.location && window.location.origin.includes('exp.direct')) {
+    const baseUrl = window.location.origin;
+    console.log('tRPC baseUrl (rork.com tunnel):', baseUrl);
+    return baseUrl;
+  }
+  
+  // For local development outside rork.com
+  if (__DEV__ && typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') {
     const fallback = 'http://localhost:3001';
-    console.log('tRPC baseUrl (forced localhost):', fallback);
+    console.log('tRPC baseUrl (local development):', fallback);
     return fallback;
   }
   
   // Check if running on Rork platform (web)
   if (typeof window !== 'undefined' && window.location) {
-    // For web, use the current origin
     const baseUrl = window.location.origin;
-    console.log('tRPC baseUrl (web):', baseUrl);
+    console.log('tRPC baseUrl (web origin):', baseUrl);
     return baseUrl;
-  }
-  
-  // Check for explicit API base URL
-  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-    console.log('tRPC baseUrl (explicit):', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
-    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
 
   // For mobile on Rork platform, try to detect the tunnel URL
@@ -189,10 +195,10 @@ export const trpcClient = trpc.createClient({
           
           // For development, provide helpful error message
           if (__DEV__) {
-            console.warn('🔧 Backend Development Setup Required:');
-            console.warn('1. The backend server is not running on port 3001');
-            console.warn('2. Run: bun backend/server.ts to start the backend');
-            console.warn('3. Verify backend is accessible at http://localhost:3001/api');
+            console.warn('🔧 Rork.com Backend Setup:');
+            console.warn('1. Make sure backend is enabled in rork.config.json');
+            console.warn('2. Backend should start automatically with the platform');
+            console.warn('3. Check rork.com dashboard for backend status');
           }
           
           // Re-throw the error so tRPC can handle it properly
