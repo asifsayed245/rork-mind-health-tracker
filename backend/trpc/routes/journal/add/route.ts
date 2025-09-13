@@ -12,10 +12,11 @@ export const addJournalEntryProcedure = protectedProcedure
     audioUri: z.string().optional(),
     meta: z.any().optional(),
   }))
-  .mutation(async ({ input }: { input: any }) => {
+  .mutation(async ({ input, ctx }) => {
     const { data, error } = await supabase
       .from('journal_entries')
       .insert({
+        user_id: ctx.user.id,
         type: input.type,
         title: input.title,
         content: input.content,

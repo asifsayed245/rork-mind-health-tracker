@@ -10,10 +10,11 @@ export const addCheckInProcedure = protectedProcedure
     energy: z.number().min(1).max(5),
     note: z.string().optional(),
   }))
-  .mutation(async ({ input }: { input: any }) => {
+  .mutation(async ({ input, ctx }) => {
     const { data, error } = await supabase
       .from('check_ins')
       .insert({
+        user_id: ctx.user.id,
         slot: input.slot,
         mood: input.mood,
         stress: input.stress,
