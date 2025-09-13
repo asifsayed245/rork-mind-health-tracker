@@ -114,7 +114,8 @@ export default function DashboardScreen() {
     y: number;
     data: DailyMetricAverage | null;
     label: string;
-  }>({ visible: false, x: 0, y: 0, data: null, label: '' });
+    metric: 'mood' | 'stress' | 'energy';
+  }>({ visible: false, x: 0, y: 0, data: null, label: '', metric: 'mood' });
   
   // Trigger recomputation when period changes
   useEffect(() => {
@@ -219,6 +220,7 @@ export default function DashboardScreen() {
         {/* Mood Trend Chart */}
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Mood Trend</Text>
+          <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
           {Platform.OS !== 'web' ? (
             <View style={styles.chartContainer}>
               <LineChart
@@ -245,7 +247,8 @@ export default function DashboardScreen() {
                   propsForDots: {
                     r: "4",
                     strokeWidth: "2",
-                    stroke: "#FFD700"
+                    stroke: "#FFD700",
+                    fill: "#FFD700"
                   }
                 }}
                 bezier
@@ -258,19 +261,23 @@ export default function DashboardScreen() {
                     x: data.x,
                     y: data.y - 40,
                     data: pointData,
-                    label: label
+                    label: label,
+                    metric: 'mood'
                   });
                   setTimeout(() => setChartTooltip(prev => ({ ...prev, visible: false })), 3000);
                 }}
               />
-              {chartTooltip.visible && chartTooltip.data && (
-                <View style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}>
+              {chartTooltip.visible && chartTooltip.data && chartTooltip.metric === 'mood' && (
+                <View 
+                  style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}
+                  accessibilityLabel={`${chartTooltip.label}, average mood ${chartTooltip.data.moodAvg ? chartTooltip.data.moodAvg.toFixed(1) : 'no data'} from ${chartTooltip.data.slotsCount} check-ins`}
+                >
                   <Text style={styles.tooltipLabel}>{chartTooltip.label}</Text>
                   <Text style={styles.tooltipValue}>
-                    Mood: {chartTooltip.data.moodAvg ? chartTooltip.data.moodAvg.toFixed(1) : 'No data'}
+                    Mood: {chartTooltip.data.moodAvg ? chartTooltip.data.moodAvg.toFixed(1) : 'No check-ins'}
                   </Text>
                   {chartTooltip.data.slotsCount > 0 && (
-                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} slots logged</Text>
+                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} check-ins</Text>
                   )}
                 </View>
               )}
@@ -295,6 +302,7 @@ export default function DashboardScreen() {
         {/* Stress Chart */}
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Stress Levels</Text>
+          <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
           {Platform.OS !== 'web' ? (
             <View style={styles.chartContainer}>
               <LineChart
@@ -321,7 +329,8 @@ export default function DashboardScreen() {
                   propsForDots: {
                     r: "4",
                     strokeWidth: "2",
-                    stroke: "#f87171"
+                    stroke: "#f87171",
+                    fill: "#f87171"
                   }
                 }}
                 bezier
@@ -334,19 +343,23 @@ export default function DashboardScreen() {
                     x: data.x,
                     y: data.y - 40,
                     data: pointData,
-                    label: label
+                    label: label,
+                    metric: 'stress'
                   });
                   setTimeout(() => setChartTooltip(prev => ({ ...prev, visible: false })), 3000);
                 }}
               />
-              {chartTooltip.visible && chartTooltip.data && (
-                <View style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}>
+              {chartTooltip.visible && chartTooltip.data && chartTooltip.metric === 'stress' && (
+                <View 
+                  style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}
+                  accessibilityLabel={`${chartTooltip.label}, average stress ${chartTooltip.data.stressAvg ? chartTooltip.data.stressAvg.toFixed(1) : 'no data'} from ${chartTooltip.data.slotsCount} check-ins`}
+                >
                   <Text style={styles.tooltipLabel}>{chartTooltip.label}</Text>
                   <Text style={styles.tooltipValue}>
-                    Stress: {chartTooltip.data.stressAvg ? chartTooltip.data.stressAvg.toFixed(1) : 'No data'}
+                    Stress: {chartTooltip.data.stressAvg ? chartTooltip.data.stressAvg.toFixed(1) : 'No check-ins'}
                   </Text>
                   {chartTooltip.data.slotsCount > 0 && (
-                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} slots logged</Text>
+                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} check-ins</Text>
                   )}
                 </View>
               )}
@@ -371,6 +384,7 @@ export default function DashboardScreen() {
         {/* Energy Chart */}
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Energy Levels</Text>
+          <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
           {Platform.OS !== 'web' ? (
             <View style={styles.chartContainer}>
               <LineChart
@@ -397,7 +411,8 @@ export default function DashboardScreen() {
                   propsForDots: {
                     r: "4",
                     strokeWidth: "2",
-                    stroke: "#4ade80"
+                    stroke: "#4ade80",
+                    fill: "#4ade80"
                   }
                 }}
                 bezier
@@ -410,19 +425,23 @@ export default function DashboardScreen() {
                     x: data.x,
                     y: data.y - 40,
                     data: pointData,
-                    label: label
+                    label: label,
+                    metric: 'energy'
                   });
                   setTimeout(() => setChartTooltip(prev => ({ ...prev, visible: false })), 3000);
                 }}
               />
-              {chartTooltip.visible && chartTooltip.data && (
-                <View style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}>
+              {chartTooltip.visible && chartTooltip.data && chartTooltip.metric === 'energy' && (
+                <View 
+                  style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}
+                  accessibilityLabel={`${chartTooltip.label}, average energy ${chartTooltip.data.energyAvg ? chartTooltip.data.energyAvg.toFixed(1) : 'no data'} from ${chartTooltip.data.slotsCount} check-ins`}
+                >
                   <Text style={styles.tooltipLabel}>{chartTooltip.label}</Text>
                   <Text style={styles.tooltipValue}>
-                    Energy: {chartTooltip.data.energyAvg ? chartTooltip.data.energyAvg.toFixed(1) : 'No data'}
+                    Energy: {chartTooltip.data.energyAvg ? chartTooltip.data.energyAvg.toFixed(1) : 'No check-ins'}
                   </Text>
                   {chartTooltip.data.slotsCount > 0 && (
-                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} slots logged</Text>
+                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} check-ins</Text>
                   )}
                 </View>
               )}
@@ -596,8 +615,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+    marginBottom: 4,
+    alignSelf: 'flex-start',
+  },
+  chartLegend: {
+    color: '#999',
+    fontSize: 12,
     marginBottom: 16,
     alignSelf: 'flex-start',
+    fontStyle: 'italic',
   },
   legend: {
     flexDirection: 'row',
