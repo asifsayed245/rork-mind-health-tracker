@@ -76,57 +76,81 @@ ALTER TABLE public.journal_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_sessions ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own check-ins" ON public.check_ins;
+DROP POLICY IF EXISTS "Users can insert their own check-ins" ON public.check_ins;
+DROP POLICY IF EXISTS "Users can update their own check-ins" ON public.check_ins;
+DROP POLICY IF EXISTS "Users can delete their own check-ins" ON public.check_ins;
+
 -- Create RLS policies for check_ins
 CREATE POLICY "Users can view their own check-ins" ON public.check_ins
-    FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own check-ins" ON public.check_ins
-    FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own check-ins" ON public.check_ins
-    FOR UPDATE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own check-ins" ON public.check_ins
-    FOR DELETE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own journal entries" ON public.journal_entries;
+DROP POLICY IF EXISTS "Users can insert their own journal entries" ON public.journal_entries;
+DROP POLICY IF EXISTS "Users can update their own journal entries" ON public.journal_entries;
+DROP POLICY IF EXISTS "Users can delete their own journal entries" ON public.journal_entries;
 
 -- Create RLS policies for journal_entries
 CREATE POLICY "Users can view their own journal entries" ON public.journal_entries
-    FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own journal entries" ON public.journal_entries
-    FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own journal entries" ON public.journal_entries
-    FOR UPDATE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own journal entries" ON public.journal_entries
-    FOR DELETE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own settings" ON public.user_settings;
+DROP POLICY IF EXISTS "Users can insert their own settings" ON public.user_settings;
+DROP POLICY IF EXISTS "Users can update their own settings" ON public.user_settings;
+DROP POLICY IF EXISTS "Users can delete their own settings" ON public.user_settings;
 
 -- Create RLS policies for user_settings
 CREATE POLICY "Users can view their own settings" ON public.user_settings
-    FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own settings" ON public.user_settings
-    FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own settings" ON public.user_settings
-    FOR UPDATE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own settings" ON public.user_settings
-    FOR DELETE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own activity sessions" ON public.activity_sessions;
+DROP POLICY IF EXISTS "Users can insert their own activity sessions" ON public.activity_sessions;
+DROP POLICY IF EXISTS "Users can update their own activity sessions" ON public.activity_sessions;
+DROP POLICY IF EXISTS "Users can delete their own activity sessions" ON public.activity_sessions;
 
 -- Create RLS policies for activity_sessions
 CREATE POLICY "Users can view their own activity sessions" ON public.activity_sessions
-    FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can insert their own activity sessions" ON public.activity_sessions
-    FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own activity sessions" ON public.activity_sessions
-    FOR UPDATE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own activity sessions" ON public.activity_sessions
-    FOR DELETE USING (auth.uid() = user_id OR user_id IS NULL);
+    FOR DELETE USING (auth.uid() = user_id);
 
 -- Create function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

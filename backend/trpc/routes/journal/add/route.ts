@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { protectedProcedure } from '@/backend/trpc/create-context';
-import { supabase } from '@/lib/supabase';
 
 export const addJournalEntryProcedure = protectedProcedure
   .input(z.object({
@@ -13,7 +12,7 @@ export const addJournalEntryProcedure = protectedProcedure
     meta: z.any().optional(),
   }))
   .mutation(async ({ input, ctx }) => {
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from('journal_entries')
       .insert({
         user_id: ctx.user.id,

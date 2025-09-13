@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { protectedProcedure } from '@/backend/trpc/create-context';
-import { supabase } from '@/lib/supabase';
 
 export const addCheckInProcedure = protectedProcedure
   .input(z.object({
@@ -11,7 +10,7 @@ export const addCheckInProcedure = protectedProcedure
     note: z.string().optional(),
   }))
   .mutation(async ({ input, ctx }) => {
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from('check_ins')
       .insert({
         user_id: ctx.user.id,
