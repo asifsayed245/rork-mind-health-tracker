@@ -518,10 +518,9 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
       userSettings.scoring.useCompletionMultiplier
     );
     
-    return computePeriodWellbeingScore(
-      dailyScores,
-      userSettings.scoring.excludeEmptyDays
-    );
+    // Use includeAsZero as default (opposite of excludeEmptyDays)
+    const emptyDayPolicy = userSettings.scoring.excludeEmptyDays ? 'exclude' : 'includeAsZero';
+    return computePeriodWellbeingScore(dailyScores, emptyDayPolicy);
   }, [checkIns, userSettings]);
 
   return useMemo(() => ({

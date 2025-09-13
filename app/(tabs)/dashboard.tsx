@@ -1,23 +1,21 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
-import { useCheckInStore, DailyAggregate } from '@/stores/checkInStore';
+import { useCheckInStore } from '@/stores/checkInStore';
 import { useUserStore } from '@/stores/userStore';
 import { useJournalStore } from '@/stores/journalStore';
+import { getDailyMetricAverages, DailyMetricAverage } from '@/lib/scoring';
 import Card from '@/components/Card';
 import ProgressRing from '@/components/ProgressRing';
-
-
-const { width } = Dimensions.get('window');
 
 type Period = 'Week' | 'Month' | 'Year';
 
@@ -26,12 +24,11 @@ export default function DashboardScreen() {
     checkIns, 
     loadCheckIns, 
     loadUserSettings,
-    getDailyAggregates,
-    userSettings,
     getWellbeingScoreForPeriod
   } = useCheckInStore();
   const { profile } = useUserStore();
   const { entries } = useJournalStore();
+  const { width } = useWindowDimensions();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('Week');
 
   useEffect(() => {
@@ -40,6 +37,7 @@ export default function DashboardScreen() {
   }, [loadCheckIns, loadUserSettings]);
 
   const handlePeriodChange = useCallback((period: Period) => {
+    if (!period || typeof period !== 'string') return;
     if ((period === 'Month' || period === 'Year') && !profile?.isPremium) {
       // Show paywall modal
       return;
@@ -47,54 +45,76 @@ export default function DashboardScreen() {
     setSelectedPeriod(period);
   }, [profile?.isPremium]);
 
-  const getChartData = () => {
+  const getChartData = useCallback(() => {
     const now = new Date();
-    let dates: string[] = [];
+    let startDate: string;
+    let endDate: string;
     let labels: string[] = [];
 
     switch (selectedPeriod) {
       case 'Week':
+        const weekAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+        startDate = weekAgo.toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
+        
         for (let i = 6; i >= 0; i--) {
           const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          const dateStr = date.toISOString().split('T')[0];
-          dates.push(dateStr);
           labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
         }
         break;
       case 'Month':
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
+        
         const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
         for (let i = 1; i <= daysInMonth; i++) {
-          const date = new Date(now.getFullYear(), now.getMonth(), i);
-          const dateStr = date.toISOString().split('T')[0];
-          dates.push(dateStr);
-          labels.push(i.toString());
+          if (i === 1 || i % 7 === 0 || i === daysInMonth) {
+            labels.push(i.toString());
+          } else {
+            labels.push('');
+          }
         }
         break;
       case 'Year':
+        startDate = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
+        
         for (let i = 0; i < 12; i++) {
           const date = new Date(now.getFullYear(), i, 1);
-          const dateStr = date.toISOString().split('T')[0];
-          dates.push(dateStr);
           labels.push(date.toLocaleDateString('en-US', { month: 'short' }));
         }
         break;
+      default:
+        startDate = now.toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
     }
 
-    const aggregates = getDailyAggregates(dates);
+    const metricAverages = getDailyMetricAverages(checkIns, startDate, endDate);
     
     return {
-      dates,
+      startDate,
+      endDate,
       labels,
-      aggregates,
-      moodData: aggregates.map(agg => agg.moodAvg || 0),
-      stressData: aggregates.map(agg => agg.stressAvg || 0),
-      energyData: aggregates.map(agg => agg.energyAvg || 0),
+      metricAverages,
+      moodData: metricAverages.map(avg => avg.moodAvg || 0),
+      stressData: metricAverages.map(avg => avg.stressAvg || 0),
+      energyData: metricAverages.map(avg => avg.energyAvg || 0),
     };
-  };
+  }, [selectedPeriod, checkIns]);
 
-  const chartData = getChartData();
-  const wellbeingScore = getWellbeingScoreForPeriod(selectedPeriod);
+  const chartData = useMemo(() => getChartData(), [getChartData]);
+  const wellbeingScore = useMemo(() => {
+    if (!selectedPeriod || typeof selectedPeriod !== 'string') return 0;
+    return getWellbeingScoreForPeriod(selectedPeriod);
+  }, [getWellbeingScoreForPeriod, selectedPeriod]);
+  
+  const [chartTooltip, setChartTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    data: DailyMetricAverage | null;
+    label: string;
+  }>({ visible: false, x: 0, y: 0, data: null, label: '' });
   
   // Trigger recomputation when period changes
   useEffect(() => {
@@ -107,15 +127,15 @@ export default function DashboardScreen() {
     new Date(entry.timestamp) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   ).length;
 
-  const getInsightText = (aggregates: DailyAggregate[]) => {
-    const validDays = aggregates.filter(agg => agg.slotsCount > 0);
+  const getInsightText = useCallback((metricAverages: DailyMetricAverage[]) => {
+    const validDays = metricAverages.filter(avg => avg.slotsCount > 0);
     if (validDays.length === 0) {
       return "Start logging your daily check-ins to see personalized insights about your wellbeing patterns.";
     }
     
-    const avgMood = validDays.reduce((sum, agg) => sum + agg.moodAvg, 0) / validDays.length;
-    const avgStress = validDays.reduce((sum, agg) => sum + agg.stressAvg, 0) / validDays.length;
-    const avgEnergy = validDays.reduce((sum, agg) => sum + agg.energyAvg, 0) / validDays.length;
+    const avgMood = validDays.reduce((sum, avg) => sum + (avg.moodAvg || 0), 0) / validDays.length;
+    const avgStress = validDays.reduce((sum, avg) => sum + (avg.stressAvg || 0), 0) / validDays.length;
+    const avgEnergy = validDays.reduce((sum, avg) => sum + (avg.energyAvg || 0), 0) / validDays.length;
     
     if (avgMood >= 4) {
       return "You're doing great! Your mood has been consistently positive. Keep up the good work with your daily check-ins.";
@@ -126,7 +146,7 @@ export default function DashboardScreen() {
     } else {
       return "Your wellbeing patterns show room for improvement. Regular check-ins help identify what works best for you.";
     }
-  };
+  }, []);
 
   const insets = useSafeAreaInsets();
 
@@ -165,82 +185,106 @@ export default function DashboardScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Wellbeing Score */}
         <Card style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <View>
+          <View style={styles.scoreContent}>
+            <View style={styles.scoreTextContainer}>
               <Text style={styles.scoreTitle}>Wellbeing Score</Text>
-              <Text style={styles.scoreSubtitle}>
+              <Text style={styles.scoreSubtitle} numberOfLines={2} ellipsizeMode="tail">
                 {selectedPeriod === 'Week' && "Based on this week's check-ins"}
                 {selectedPeriod === 'Month' && "Based on this month's check-ins"}
                 {selectedPeriod === 'Year' && "Based on this year's check-ins"}
               </Text>
+              <Text style={styles.scoreNumber}>{wellbeingScore}/100</Text>
+              {wellbeingScore === 0 && (
+                <Text style={styles.noDataText}>
+                  Log a few check-ins to see your score
+                </Text>
+              )}
+              {selectedPeriod === 'Week' && wellbeingScore > 0 && (
+                <Text style={styles.helperText} numberOfLines={2}>
+                  Average of your daily wellness scores across all 7 days (missing days counted as 0)
+                </Text>
+              )}
             </View>
-            <ProgressRing
-              size={80}
-              strokeWidth={6}
-              progress={wellbeingScore}
-              color="#FFD700"
-            />
+            <View style={styles.ringContainer}>
+              <ProgressRing
+                size={64}
+                strokeWidth={6}
+                progress={wellbeingScore}
+                color="#FFD700"
+              />
+            </View>
           </View>
-          <Text style={styles.scoreNumber}>{wellbeingScore}/100</Text>
-          {wellbeingScore === 0 && (
-            <Text style={styles.noDataText}>
-              Log a few check-ins to see your score
-            </Text>
-          )}
-          {selectedPeriod === 'Week' && wellbeingScore > 0 && (
-            <Text style={styles.helperText}>
-              Average of your daily wellness scores over the last 7 days
-            </Text>
-          )}
         </Card>
 
         {/* Mood Trend Chart */}
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Mood Trend</Text>
           {Platform.OS !== 'web' ? (
-            <LineChart
-              data={{
-                labels: chartData.labels.length > 7 ? 
-                  chartData.labels.filter((_, i) => i % Math.ceil(chartData.labels.length / 7) === 0) :
-                  chartData.labels,
-                datasets: [{
-                  data: chartData.moodData.length > 0 ? chartData.moodData : [0],
-                  color: () => '#FFD700',
-                  strokeWidth: 3,
-                }]
-              }}
-              width={width - 64}
-              height={200}
-              chartConfig={{
-                backgroundColor: '#2a2a2a',
-                backgroundGradientFrom: '#2a2a2a',
-                backgroundGradientTo: '#2a2a2a',
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(255, 215, 0, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "4",
-                  strokeWidth: "2",
-                  stroke: "#FFD700"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            <View style={styles.chartContainer}>
+              <LineChart
+                data={{
+                  labels: chartData.labels,
+                  datasets: [{
+                    data: chartData.moodData.length > 0 ? chartData.moodData : [0],
+                    color: () => '#FFD700',
+                    strokeWidth: 3,
+                  }]
+                }}
+                width={width - 64}
+                height={200}
+                chartConfig={{
+                  backgroundColor: '#2a2a2a',
+                  backgroundGradientFrom: '#2a2a2a',
+                  backgroundGradientTo: '#2a2a2a',
+                  decimalPlaces: 1,
+                  color: (opacity = 1) => `rgba(255, 215, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                  style: {
+                    borderRadius: 16
+                  },
+                  propsForDots: {
+                    r: "4",
+                    strokeWidth: "2",
+                    stroke: "#FFD700"
+                  }
+                }}
+                bezier
+                style={styles.chartStyle}
+                onDataPointClick={(data) => {
+                  const pointData = chartData.metricAverages[data.index];
+                  const label = chartData.labels[data.index];
+                  setChartTooltip({
+                    visible: true,
+                    x: data.x,
+                    y: data.y - 40,
+                    data: pointData,
+                    label: label
+                  });
+                  setTimeout(() => setChartTooltip(prev => ({ ...prev, visible: false })), 3000);
+                }}
+              />
+              {chartTooltip.visible && chartTooltip.data && (
+                <View style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}>
+                  <Text style={styles.tooltipLabel}>{chartTooltip.label}</Text>
+                  <Text style={styles.tooltipValue}>
+                    Mood: {chartTooltip.data.moodAvg ? chartTooltip.data.moodAvg.toFixed(1) : 'No data'}
+                  </Text>
+                  {chartTooltip.data.slotsCount > 0 && (
+                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} slots logged</Text>
+                  )}
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.webChartPlaceholder}>
               <Text style={styles.webChartText}>Chart view available on mobile</Text>
               <View style={styles.webChartData}>
-                {chartData.aggregates.map((agg) => (
-                  <View key={agg.date} style={styles.webDataPoint}>
-                    <Text style={styles.webDataLabel}>{chartData.labels[chartData.aggregates.indexOf(agg)]}</Text>
-                    <Text style={styles.webDataValue}>{agg.moodAvg.toFixed(1)}</Text>
+                {chartData.metricAverages.map((avg, index) => (
+                  <View key={avg.dateISO} style={styles.webDataPoint}>
+                    <Text style={styles.webDataLabel}>{chartData.labels[index]}</Text>
+                    <Text style={styles.webDataValue}>
+                      {avg.moodAvg ? avg.moodAvg.toFixed(1) : 'No data'}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -252,49 +296,71 @@ export default function DashboardScreen() {
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Stress Levels</Text>
           {Platform.OS !== 'web' ? (
-            <LineChart
-              data={{
-                labels: chartData.labels.length > 7 ? 
-                  chartData.labels.filter((_, i) => i % Math.ceil(chartData.labels.length / 7) === 0) :
-                  chartData.labels,
-                datasets: [{
-                  data: chartData.stressData.length > 0 ? chartData.stressData : [0],
-                  color: () => '#f87171',
-                  strokeWidth: 3,
-                }]
-              }}
-              width={width - 64}
-              height={200}
-              chartConfig={{
-                backgroundColor: '#2a2a2a',
-                backgroundGradientFrom: '#2a2a2a',
-                backgroundGradientTo: '#2a2a2a',
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(248, 113, 113, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "4",
-                  strokeWidth: "2",
-                  stroke: "#f87171"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            <View style={styles.chartContainer}>
+              <LineChart
+                data={{
+                  labels: chartData.labels,
+                  datasets: [{
+                    data: chartData.stressData.length > 0 ? chartData.stressData : [0],
+                    color: () => '#f87171',
+                    strokeWidth: 3,
+                  }]
+                }}
+                width={width - 64}
+                height={200}
+                chartConfig={{
+                  backgroundColor: '#2a2a2a',
+                  backgroundGradientFrom: '#2a2a2a',
+                  backgroundGradientTo: '#2a2a2a',
+                  decimalPlaces: 1,
+                  color: (opacity = 1) => `rgba(248, 113, 113, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                  style: {
+                    borderRadius: 16
+                  },
+                  propsForDots: {
+                    r: "4",
+                    strokeWidth: "2",
+                    stroke: "#f87171"
+                  }
+                }}
+                bezier
+                style={styles.chartStyle}
+                onDataPointClick={(data) => {
+                  const pointData = chartData.metricAverages[data.index];
+                  const label = chartData.labels[data.index];
+                  setChartTooltip({
+                    visible: true,
+                    x: data.x,
+                    y: data.y - 40,
+                    data: pointData,
+                    label: label
+                  });
+                  setTimeout(() => setChartTooltip(prev => ({ ...prev, visible: false })), 3000);
+                }}
+              />
+              {chartTooltip.visible && chartTooltip.data && (
+                <View style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}>
+                  <Text style={styles.tooltipLabel}>{chartTooltip.label}</Text>
+                  <Text style={styles.tooltipValue}>
+                    Stress: {chartTooltip.data.stressAvg ? chartTooltip.data.stressAvg.toFixed(1) : 'No data'}
+                  </Text>
+                  {chartTooltip.data.slotsCount > 0 && (
+                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} slots logged</Text>
+                  )}
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.webChartPlaceholder}>
               <Text style={styles.webChartText}>Chart view available on mobile</Text>
               <View style={styles.webChartData}>
-                {chartData.aggregates.map((agg) => (
-                  <View key={`stress-${agg.date}`} style={styles.webDataPoint}>
-                    <Text style={styles.webDataLabel}>{chartData.labels[chartData.aggregates.indexOf(agg)]}</Text>
-                    <Text style={[styles.webDataValue, styles.stressColor]}>{agg.stressAvg.toFixed(1)}</Text>
+                {chartData.metricAverages.map((avg, index) => (
+                  <View key={`stress-${avg.dateISO}`} style={styles.webDataPoint}>
+                    <Text style={styles.webDataLabel}>{chartData.labels[index]}</Text>
+                    <Text style={[styles.webDataValue, styles.stressColor]}>
+                      {avg.stressAvg ? avg.stressAvg.toFixed(1) : 'No data'}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -306,49 +372,71 @@ export default function DashboardScreen() {
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Energy Levels</Text>
           {Platform.OS !== 'web' ? (
-            <LineChart
-              data={{
-                labels: chartData.labels.length > 7 ? 
-                  chartData.labels.filter((_, i) => i % Math.ceil(chartData.labels.length / 7) === 0) :
-                  chartData.labels,
-                datasets: [{
-                  data: chartData.energyData.length > 0 ? chartData.energyData : [0],
-                  color: () => '#4ade80',
-                  strokeWidth: 3,
-                }]
-              }}
-              width={width - 64}
-              height={200}
-              chartConfig={{
-                backgroundColor: '#2a2a2a',
-                backgroundGradientFrom: '#2a2a2a',
-                backgroundGradientTo: '#2a2a2a',
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(74, 222, 128, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: {
-                  borderRadius: 16
-                },
-                propsForDots: {
-                  r: "4",
-                  strokeWidth: "2",
-                  stroke: "#4ade80"
-                }
-              }}
-              bezier
-              style={{
-                marginVertical: 8,
-                borderRadius: 16
-              }}
-            />
+            <View style={styles.chartContainer}>
+              <LineChart
+                data={{
+                  labels: chartData.labels,
+                  datasets: [{
+                    data: chartData.energyData.length > 0 ? chartData.energyData : [0],
+                    color: () => '#4ade80',
+                    strokeWidth: 3,
+                  }]
+                }}
+                width={width - 64}
+                height={200}
+                chartConfig={{
+                  backgroundColor: '#2a2a2a',
+                  backgroundGradientFrom: '#2a2a2a',
+                  backgroundGradientTo: '#2a2a2a',
+                  decimalPlaces: 1,
+                  color: (opacity = 1) => `rgba(74, 222, 128, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                  style: {
+                    borderRadius: 16
+                  },
+                  propsForDots: {
+                    r: "4",
+                    strokeWidth: "2",
+                    stroke: "#4ade80"
+                  }
+                }}
+                bezier
+                style={styles.chartStyle}
+                onDataPointClick={(data) => {
+                  const pointData = chartData.metricAverages[data.index];
+                  const label = chartData.labels[data.index];
+                  setChartTooltip({
+                    visible: true,
+                    x: data.x,
+                    y: data.y - 40,
+                    data: pointData,
+                    label: label
+                  });
+                  setTimeout(() => setChartTooltip(prev => ({ ...prev, visible: false })), 3000);
+                }}
+              />
+              {chartTooltip.visible && chartTooltip.data && (
+                <View style={[styles.tooltip, { left: chartTooltip.x - 50, top: chartTooltip.y }]}>
+                  <Text style={styles.tooltipLabel}>{chartTooltip.label}</Text>
+                  <Text style={styles.tooltipValue}>
+                    Energy: {chartTooltip.data.energyAvg ? chartTooltip.data.energyAvg.toFixed(1) : 'No data'}
+                  </Text>
+                  {chartTooltip.data.slotsCount > 0 && (
+                    <Text style={styles.tooltipSlots}>{chartTooltip.data.slotsCount} slots logged</Text>
+                  )}
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.webChartPlaceholder}>
               <Text style={styles.webChartText}>Chart view available on mobile</Text>
               <View style={styles.webChartData}>
-                {chartData.aggregates.map((agg) => (
-                  <View key={`energy-${agg.date}`} style={styles.webDataPoint}>
-                    <Text style={styles.webDataLabel}>{chartData.labels[chartData.aggregates.indexOf(agg)]}</Text>
-                    <Text style={[styles.webDataValue, styles.energyColor]}>{agg.energyAvg.toFixed(1)}</Text>
+                {chartData.metricAverages.map((avg, index) => (
+                  <View key={`energy-${avg.dateISO}`} style={styles.webDataPoint}>
+                    <Text style={styles.webDataLabel}>{chartData.labels[index]}</Text>
+                    <Text style={[styles.webDataValue, styles.energyColor]}>
+                      {avg.energyAvg ? avg.energyAvg.toFixed(1) : 'No data'}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -367,7 +455,7 @@ export default function DashboardScreen() {
         <Card style={styles.insightsCard}>
           <Text style={styles.insightsTitle}>💡 Insights</Text>
           <Text style={styles.insightsText}>
-            {getInsightText(chartData.aggregates)}
+            {getInsightText(chartData.metricAverages)}
           </Text>
         </Card>
       </ScrollView>
@@ -427,12 +515,23 @@ const styles = StyleSheet.create({
   },
   scoreCard: {
     marginBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  scoreHeader: {
+  scoreContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  scoreTextContainer: {
+    flex: 1,
+    paddingRight: 88,
+  },
+  ringContainer: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 64,
+    height: 64,
   },
   scoreTitle: {
     color: '#fff',
@@ -448,24 +547,50 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 32,
     fontWeight: 'bold',
-    textAlign: 'center',
+    marginTop: 8,
   },
   noDataText: {
     color: '#999',
     fontSize: 14,
-    textAlign: 'center',
     marginTop: 8,
   },
   helperText: {
     color: '#666',
     fontSize: 12,
-    textAlign: 'center',
     marginTop: 4,
     fontStyle: 'italic',
+    lineHeight: 16,
   },
   chartCard: {
     marginBottom: 16,
     alignItems: 'center',
+  },
+  chartContainer: {
+    position: 'relative',
+  },
+  tooltip: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 8,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  tooltipLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  tooltipValue: {
+    color: '#FFD700',
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  tooltipSlots: {
+    color: '#999',
+    fontSize: 10,
   },
   chartTitle: {
     color: '#fff',
@@ -573,5 +698,9 @@ const styles = StyleSheet.create({
   },
   energyColor: {
     color: '#4ade80',
+  },
+  chartStyle: {
+    marginVertical: 8,
+    borderRadius: 16,
   },
 });

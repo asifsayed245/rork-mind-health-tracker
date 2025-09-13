@@ -19,7 +19,7 @@ export const DEFAULT_SCORING_SETTINGS: ScoringSettings = {
     stressWeight: 0.20,
   },
   useCompletionMultiplier: true,
-  excludeEmptyDays: true,
+  excludeEmptyDays: false, // Changed to false (includeAsZero is default)
 };
 
 export function normalizeSlotValue(value: number, isStress: boolean = false): number {
@@ -69,19 +69,20 @@ export function computeDailyCheckinScore(
 }
 
 export function computePeriodWellbeingScore(
-  dailyScores: number[],
-  excludeEmptyDays: boolean = true
+  dailyScores: Array<number | null>,
+  emptyDayPolicy: 'exclude' | 'includeAsZero' = 'includeAsZero'
 ): number {
-  const validScores = excludeEmptyDays 
-    ? dailyScores.filter(score => score > 0)
-    : dailyScores;
-  
-  if (validScores.length === 0) {
-    return 0;
+  if (dailyScores.length === 0) return 0;
+
+  if (emptyDayPolicy === 'includeAsZero') {
+    const normalized = dailyScores.map(s => (s == null ? 0 : s));
+    return Math.round(normalized.reduce((a, b) => a + b, 0) / normalized.length);
   }
-  
-  const average = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
-  return Math.round(average);
+
+  // exclude policy (not default)
+  const present = dailyScores.filter(s => s != null) as number[];
+  if (present.length === 0) return 0;
+  return Math.round(present.reduce((a, b) => a + b, 0) / present.length);
 }
 
 export function normalizeWeights(weights: ScoringWeights): ScoringWeights {
@@ -104,8 +105,8 @@ export function getDailyScoresForPeriod(
   endDate: string,
   weights: ScoringWeights,
   useCompletionMultiplier: boolean
-): number[] {
-  const dailyScores: number[] = [];
+): Array<number | null> {
+  const dailyScores: Array<number | null> = [];
   const start = new Date(startDate);
   const end = new Date(endDate);
   
@@ -115,9 +116,58 @@ export function getDailyScoresForPeriod(
       checkIn.timestampISO.split('T')[0] === dateStr
     );
     
-    const dailyScore = computeDailyCheckinScore(dayCheckIns, weights, useCompletionMultiplier);
-    dailyScores.push(dailyScore);
+    if (dayCheckIns.length === 0) {
+      dailyScores.push(null);
+    } else {
+      const dailyScore = computeDailyCheckinScore(dayCheckIns, weights, useCompletionMultiplier);
+      dailyScores.push(dailyScore);
+    }
   }
   
   return dailyScores;
+}
+
+export interface DailyMetricAverage {
+  dateISO: string;
+  slotsCount: number;
+  moodAvg: number | null;
+  stressAvg: number | null;
+  energyAvg: number | null;
+}
+
+export function getDailyMetricAverages(
+  checkIns: CheckIn[],
+  startISO: string,
+  endISO: string
+): DailyMetricAverage[] {
+  const results: DailyMetricAverage[] = [];
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  
+  for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+    const dateStr = date.toISOString().split('T')[0];
+    const dayCheckIns = checkIns.filter(checkIn => 
+      checkIn.timestampISO.split('T')[0] === dateStr
+    );
+    
+    if (dayCheckIns.length === 0) {
+      results.push({
+        dateISO: dateStr,
+        slotsCount: 0,
+        moodAvg: null,
+        stressAvg: null,
+        energyAvg: null,
+      });
+    } else {
+      results.push({
+        dateISO: dateStr,
+        slotsCount: dayCheckIns.length,
+        moodAvg: dayCheckIns.reduce((sum, c) => sum + c.mood, 0) / dayCheckIns.length,
+        stressAvg: dayCheckIns.reduce((sum, c) => sum + c.stress, 0) / dayCheckIns.length,
+        energyAvg: dayCheckIns.reduce((sum, c) => sum + c.energy, 0) / dayCheckIns.length,
+      });
+    }
+  }
+  
+  return results;
 }
