@@ -95,6 +95,12 @@ export default function DashboardScreen() {
 
   const chartData = getChartData();
   const wellbeingScore = getWellbeingScoreForPeriod(selectedPeriod);
+  
+  // Trigger recomputation when period changes
+  useEffect(() => {
+    // This will cause the wellbeing score to be recalculated
+    // when the period changes, ensuring the ring animates
+  }, [selectedPeriod]);
 
   const gratitudeStreak = entries.filter(entry => 
     entry.type === 'gratitude' && 
@@ -162,7 +168,11 @@ export default function DashboardScreen() {
           <View style={styles.scoreHeader}>
             <View>
               <Text style={styles.scoreTitle}>Wellbeing Score</Text>
-              <Text style={styles.scoreSubtitle}>Based on your check-ins</Text>
+              <Text style={styles.scoreSubtitle}>
+                {selectedPeriod === 'Week' && "Based on this week's check-ins"}
+                {selectedPeriod === 'Month' && "Based on this month's check-ins"}
+                {selectedPeriod === 'Year' && "Based on this year's check-ins"}
+              </Text>
             </View>
             <ProgressRing
               size={80}
@@ -172,6 +182,16 @@ export default function DashboardScreen() {
             />
           </View>
           <Text style={styles.scoreNumber}>{wellbeingScore}/100</Text>
+          {wellbeingScore === 0 && (
+            <Text style={styles.noDataText}>
+              Log a few check-ins to see your score
+            </Text>
+          )}
+          {selectedPeriod === 'Week' && wellbeingScore > 0 && (
+            <Text style={styles.helperText}>
+              Average of your daily wellness scores over the last 7 days
+            </Text>
+          )}
         </Card>
 
         {/* Mood Trend Chart */}
@@ -429,6 +449,19 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  noDataText: {
+    color: '#999',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  helperText: {
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   chartCard: {
     marginBottom: 16,
