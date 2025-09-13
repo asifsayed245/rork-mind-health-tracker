@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { combine } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trpcClient } from '@/lib/trpc';
 
 export interface CheckIn {
   id: string;
@@ -63,37 +64,84 @@ export const useCheckInStore = create(
     },
     (set, get) => ({
       addCheckIn: async (checkInData: Omit<CheckIn, 'id' | 'timestampISO'>) => {
-        const newCheckIn: CheckIn = {
-          ...checkInData,
-          id: Date.now().toString(),
-          timestampISO: new Date().toISOString(),
-        };
-        
-        const checkIns = [...get().checkIns, newCheckIn];
-        const today = new Date().toISOString().split('T')[0];
-        const todayCheckIns = checkIns.filter(c => c.timestampISO.split('T')[0] === today);
-        
-        set({ checkIns, todayCheckIns });
-        
         try {
+          // Save to database via tRPC
+          const savedCheckIn = await trpcClient.checkins.add.mutate({
+            slot: checkInData.slot,
+            mood: checkInData.mood,
+            stress: checkInData.stress,
+            energy: checkInData.energy,
+            note: checkInData.note,
+          });
+
+          // Convert database format to local format
+          const newCheckIn: CheckIn = {
+            id: savedCheckIn.id,
+            userId: savedCheckIn.user_id || undefined,
+            slot: savedCheckIn.slot,
+            mood: savedCheckIn.mood,
+            stress: savedCheckIn.stress,
+            energy: savedCheckIn.energy,
+            note: savedCheckIn.note || undefined,
+            timestampISO: savedCheckIn.created_at,
+          };
+          
+          const checkIns = [...get().checkIns, newCheckIn];
+          const today = new Date().toISOString().split('T')[0];
+          const todayCheckIns = checkIns.filter(c => c.timestampISO.split('T')[0] === today);
+          
+          set({ checkIns, todayCheckIns });
+          
+          // Also save to AsyncStorage as backup
           await AsyncStorage.setItem('checkIns', JSON.stringify(checkIns));
         } catch (error) {
           console.error('Failed to save check-in:', error);
+          throw error;
         }
       },
       
       loadCheckIns: async () => {
         try {
-          const stored = await AsyncStorage.getItem('checkIns');
-          const checkIns = stored ? JSON.parse(stored) : [];
+          // Try to load from database first
+          const dbCheckIns = await trpcClient.checkins.get.query();
+          
+          // Convert database format to local format
+          const checkIns: CheckIn[] = dbCheckIns.map(dbCheckIn => ({
+            id: dbCheckIn.id,
+            userId: dbCheckIn.user_id || undefined,
+            slot: dbCheckIn.slot,
+            mood: dbCheckIn.mood,
+            stress: dbCheckIn.stress,
+            energy: dbCheckIn.energy,
+            note: dbCheckIn.note || undefined,
+            timestampISO: dbCheckIn.created_at,
+          }));
+          
           const today = new Date().toISOString().split('T')[0];
           const todayCheckIns = checkIns.filter((checkIn: CheckIn) => 
             checkIn.timestampISO?.split('T')[0] === today
           );
+          
           set({ checkIns, todayCheckIns, isLoading: false });
+          
+          // Save to AsyncStorage as backup
+          await AsyncStorage.setItem('checkIns', JSON.stringify(checkIns));
         } catch (error) {
-          console.error('Failed to load check-ins:', error);
-          set({ isLoading: false });
+          console.error('Failed to load check-ins from database, trying AsyncStorage:', error);
+          
+          // Fallback to AsyncStorage
+          try {
+            const stored = await AsyncStorage.getItem('checkIns');
+            const checkIns = stored ? JSON.parse(stored) : [];
+            const today = new Date().toISOString().split('T')[0];
+            const todayCheckIns = checkIns.filter((checkIn: CheckIn) => 
+              checkIn.timestampISO?.split('T')[0] === today
+            );
+            set({ checkIns, todayCheckIns, isLoading: false });
+          } catch (asyncError) {
+            console.error('Failed to load check-ins from AsyncStorage:', asyncError);
+            set({ isLoading: false });
+          }
         }
       },
       
