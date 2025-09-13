@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TextInput,
   Modal,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, X, Mic, MicOff, Edit3, Trash2 } from 'lucide-react-native';
@@ -38,14 +40,75 @@ export default function JournalScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [isRecording, setIsRecording] = useState(false);
   const [entryCounts, setEntryCounts] = useState({ all: 0, positive: 0, negative: 0, gratitude: 0, reflection: 0 });
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const barAnimations = useRef(
+    filterTabs.map(() => new Animated.Value(0))
+  ).current;
+  const entryAnimations = useRef<Animated.Value[]>([]).current;
+
+  const filteredEntries = entries.filter(entry => {
+    if (activeFilter === 'All') return true;
+    return entry.type === activeFilter.toLowerCase();
+  });
 
   useEffect(() => {
     loadEntries();
+    
+    // Start entrance animations
+    const animations = [
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.back(1.1)),
+        useNativeDriver: true,
+      }),
+    ];
+
+    // Animate bars rising up
+    const barStaggerAnimations = barAnimations.map((anim, index) => 
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 800,
+        delay: 300 + (index * 100),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false, // height animation needs layout
+      })
+    );
+
+    Animated.parallel([
+      ...animations,
+      ...barStaggerAnimations,
+    ]).start();
   }, [loadEntries]);
 
   useEffect(() => {
     setEntryCounts(getEntryCounts());
-  }, [entries, getEntryCounts]);
+    
+    // Animate entry cards sliding in
+    entryAnimations.length = filteredEntries.length;
+    for (let i = 0; i < filteredEntries.length; i++) {
+      if (!entryAnimations[i]) {
+        entryAnimations[i] = new Animated.Value(0);
+      }
+      
+      Animated.timing(entryAnimations[i], {
+        toValue: 1,
+        duration: 500,
+        delay: i * 100,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [entries, getEntryCounts, activeFilter]);
 
   const handleSaveEntry = useCallback(async () => {
     if (!title.trim() || !content.trim()) {
@@ -88,10 +151,7 @@ export default function JournalScreen() {
     }
   }, [addEntry, updateEntry, selectedEntry, isEditing, selectedType, title, content, mood]);
 
-  const filteredEntries = entries.filter(entry => {
-    if (activeFilter === 'All') return true;
-    return entry.type === activeFilter.toLowerCase();
-  });
+
 
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -152,11 +212,21 @@ export default function JournalScreen() {
     }
   };
 
-  const getBarHeight = (filter: string) => {
+  const getBarHeight = (filter: string, animated = false) => {
     const count = getFilterCount(filter);
     const maxCount = Math.max(...filterTabs.map(f => getFilterCount(f)), 1);
     const baseHeight = 140; // 30% taller than previous 108px (108 * 1.3)
-    return Math.max((count / maxCount) * baseHeight, count > 0 ? 8 : baseHeight * 0.1);
+    const targetHeight = Math.max((count / maxCount) * baseHeight, count > 0 ? 8 : baseHeight * 0.1);
+    
+    if (animated) {
+      const index = filterTabs.indexOf(filter);
+      return barAnimations[index]?.interpolate({
+        inputRange: [0, 1],
+        outputRange: [baseHeight * 0.1, targetHeight],
+      }) || targetHeight;
+    }
+    
+    return targetHeight;
   };
 
 
@@ -176,11 +246,17 @@ export default function JournalScreen() {
       </View>
 
       {/* Filter Tabs */}
-      <View style={styles.filterSection}>
+      <Animated.View style={[
+        styles.filterSection,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }]
+        }
+      ]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-          {filterTabs.map((filter) => {
+          {filterTabs.map((filter, index) => {
             const count = getFilterCount(filter);
-            const barHeight = getBarHeight(filter);
+            const animatedBarHeight = getBarHeight(filter, true);
             return (
               <TouchableOpacity
                 key={filter}
@@ -191,9 +267,9 @@ export default function JournalScreen() {
                 onPress={() => setActiveFilter(filter)}
               >
                 <View style={styles.filterContent}>
-                  <View style={[
+                  <Animated.View style={[
                     styles.filterBar,
-                    { height: barHeight },
+                    { height: animatedBarHeight },
                     activeFilter === filter && styles.activeFilterBar,
                   ]} />
                   <Text
@@ -220,59 +296,85 @@ export default function JournalScreen() {
             );
           })}
         </ScrollView>
-      </View>
+      </Animated.View>
 
       {/* Entries List */}
       <ScrollView style={styles.entriesList} showsVerticalScrollIndicator={false}>
         {filteredEntries.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No entries yet</Text>
-            <Text style={styles.emptyText}>
-              Start journaling to track your thoughts and feelings
-            </Text>
-          </Card>
+          <Animated.View style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }}>
+            <Card style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No entries yet</Text>
+              <Text style={styles.emptyText}>
+                Start journaling to track your thoughts and feelings
+              </Text>
+            </Card>
+          </Animated.View>
         ) : (
-          filteredEntries.map((entry) => (
-            <TouchableOpacity key={entry.id} onPress={() => handleEntryPress(entry)}>
-              <Card style={styles.entryCard}>
-                <View style={styles.entryHeader}>
-                  <View style={styles.entryInfo}>
-                    <Text style={styles.entryTitle}>
-                      {entry.type === 'reflection' && entry.meta?.event ? entry.meta.event : entry.title}
-                    </Text>
-                    <Text style={styles.entryDate}>{formatDate(entry.timestamp)}</Text>
-                  </View>
-                  <View style={styles.entryMeta}>
-                    <Text style={styles.typeIcon}>
-                      {entryTypes.find(t => t.key === entry.type)?.icon || '📝'}
-                    </Text>
-                    <View
-                      style={[
-                        styles.typeIndicator,
-                        { backgroundColor: entryTypes.find(t => t.key === entry.type)?.color },
-                      ]}
-                    />
-                  </View>
-                </View>
-                {entry.type === 'reflection' && entry.meta ? (
-                  <View>
-                    <Text style={styles.reflectionReframe} numberOfLines={2}>
-                      💡 {entry.meta.reframe}
-                    </Text>
-                    {entry.meta.thought && (
-                      <Text style={styles.reflectionThought} numberOfLines={1}>
-                        Thought: {entry.meta.thought}
+          filteredEntries.map((entry, index) => {
+            const entryAnim = entryAnimations[index] || new Animated.Value(1);
+            return (
+              <Animated.View
+                key={entry.id}
+                style={{
+                  opacity: entryAnim,
+                  transform: [{
+                    translateX: entryAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [100, 0],
+                    })
+                  }, {
+                    scale: entryAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.9, 1],
+                    })
+                  }]
+                }}
+              >
+                <TouchableOpacity onPress={() => handleEntryPress(entry)}>
+                  <Card style={styles.entryCard}>
+                    <View style={styles.entryHeader}>
+                      <View style={styles.entryInfo}>
+                        <Text style={styles.entryTitle}>
+                          {entry.type === 'reflection' && entry.meta?.event ? entry.meta.event : entry.title}
+                        </Text>
+                        <Text style={styles.entryDate}>{formatDate(entry.timestamp)}</Text>
+                      </View>
+                      <View style={styles.entryMeta}>
+                        <Text style={styles.typeIcon}>
+                          {entryTypes.find(t => t.key === entry.type)?.icon || '📝'}
+                        </Text>
+                        <View
+                          style={[
+                            styles.typeIndicator,
+                            { backgroundColor: entryTypes.find(t => t.key === entry.type)?.color },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                    {entry.type === 'reflection' && entry.meta ? (
+                      <View>
+                        <Text style={styles.reflectionReframe} numberOfLines={2}>
+                          💡 {entry.meta.reframe}
+                        </Text>
+                        {entry.meta.thought && (
+                          <Text style={styles.reflectionThought} numberOfLines={1}>
+                            Thought: {entry.meta.thought}
+                          </Text>
+                        )}
+                      </View>
+                    ) : (
+                      <Text style={styles.entryContent} numberOfLines={2}>
+                        {entry.content}
                       </Text>
                     )}
-                  </View>
-                ) : (
-                  <Text style={styles.entryContent} numberOfLines={2}>
-                    {entry.content}
-                  </Text>
-                )}
-              </Card>
-            </TouchableOpacity>
-          ))
+                  </Card>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })
         )}
       </ScrollView>
 

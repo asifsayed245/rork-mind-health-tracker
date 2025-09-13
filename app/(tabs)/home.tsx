@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
+  Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Heart, Wind, MessageCircle, X } from 'lucide-react-native';
@@ -40,7 +41,21 @@ export default function HomeScreen() {
   const [selectedSlot, setSelectedSlot] = useState<CheckIn['slot'] | undefined>();
   const [showHeavyCard, setShowHeavyCard] = useState(false);
 
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const cardAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+  const actionButtonAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -73,11 +88,55 @@ export default function HomeScreen() {
     
     initializeData();
     
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
+    // Staggered entrance animations
+    const animations = [
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.back(1.2)),
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ];
+
+    // Stagger card animations
+    const cardStaggerAnimations = cardAnimations.map((anim, index) => 
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 600,
+        delay: index * 150,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+
+    // Stagger action button animations
+    const actionStaggerAnimations = actionButtonAnimations.map((anim, index) => 
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 500,
+        delay: 800 + (index * 100),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+
+    Animated.parallel([
+      ...animations,
+      ...cardStaggerAnimations,
+      ...actionStaggerAnimations,
+    ]).start();
   }, [isAuthenticated]);
 
   const handleSlotPress = useCallback((slot: CheckIn['slot']) => {
@@ -124,7 +183,13 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <Animated.View style={[
+          styles.content, 
+          { 
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
+          }
+        ]}>
           {/* Header */}
           <View style={styles.header}>
             <View>
@@ -148,129 +213,209 @@ export default function HomeScreen() {
           </View>
 
           {/* Daily Wellness Score Card */}
-          <Card style={styles.scoreCard}>
-            <View style={styles.scoreHeader}>
-              <View>
-                <Text style={styles.scoreTitle}>Daily Wellness Score</Text>
-                <Text style={styles.scoreSubtitle}>
-                  based on today's check-ins
-                </Text>
+          <Animated.View style={{
+            opacity: cardAnimations[0],
+            transform: [{
+              translateY: cardAnimations[0].interpolate({
+                inputRange: [0, 1],
+                outputRange: [30, 0],
+              })
+            }]
+          }}>
+            <Card style={styles.scoreCard}>
+              <View style={styles.scoreHeader}>
+                <View>
+                  <Text style={styles.scoreTitle}>Daily Wellness Score</Text>
+                  <Text style={styles.scoreSubtitle}>
+                    based on today&apos;s check-ins
+                  </Text>
+                </View>
+                <ProgressRing
+                  size={60}
+                  strokeWidth={4}
+                  progress={dailyWellnessScore}
+                  color="#000000"
+                  trackColor="rgba(0,0,0,0.24)"
+                />
               </View>
-              <ProgressRing
-                size={60}
-                strokeWidth={4}
-                progress={dailyWellnessScore}
-                color="#000000"
-                trackColor="rgba(0,0,0,0.24)"
-              />
-            </View>
-            <View style={styles.scoreCenter}>
-              <Text style={styles.scoreCenterNumber}>{dailyWellnessScore}%</Text>
-            </View>
-          </Card>
+              <View style={styles.scoreCenter}>
+                <Text style={styles.scoreCenterNumber}>{dailyWellnessScore}%</Text>
+              </View>
+            </Card>
+          </Animated.View>
 
           {/* Check-in Progress */}
-          <Card style={styles.checkInCard}>
-            <CheckInProgress 
-              todayCheckIns={todayCheckIns}
-              onSlotPress={handleSlotPress}
-            />
-          </Card>
+          <Animated.View style={{
+            opacity: cardAnimations[1],
+            transform: [{
+              translateY: cardAnimations[1].interpolate({
+                inputRange: [0, 1],
+                outputRange: [30, 0],
+              })
+            }]
+          }}>
+            <Card style={styles.checkInCard}>
+              <CheckInProgress 
+                todayCheckIns={todayCheckIns}
+                onSlotPress={handleSlotPress}
+              />
+            </Card>
+          </Animated.View>
 
           {/* Quick Actions */}
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActions}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/gratitude')}
-            >
-              <Heart color="#FFD700" size={24} />
-              <Text style={styles.actionText}>Gratitude</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/breathing')}
-            >
-              <Wind color="#FFD700" size={24} />
-              <Text style={styles.actionText}>Breathing</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/reflection')}
-            >
-              <MessageCircle color="#FFD700" size={24} />
-              <Text style={styles.actionText}>Reflection</Text>
-            </TouchableOpacity>
-          </View>
+          <Animated.View style={{
+            opacity: cardAnimations[2],
+            transform: [{
+              translateY: cardAnimations[2].interpolate({
+                inputRange: [0, 1],
+                outputRange: [30, 0],
+              })
+            }]
+          }}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.quickActions}>
+              <Animated.View style={{
+                opacity: actionButtonAnimations[0],
+                transform: [{
+                  scale: actionButtonAnimations[0].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  })
+                }]
+              }}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => router.push('/gratitude')}
+                >
+                  <Heart color="#FFD700" size={24} />
+                  <Text style={styles.actionText}>Gratitude</Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View style={{
+                opacity: actionButtonAnimations[1],
+                transform: [{
+                  scale: actionButtonAnimations[1].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  })
+                }]
+              }}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => router.push('/breathing')}
+                >
+                  <Wind color="#FFD700" size={24} />
+                  <Text style={styles.actionText}>Breathing</Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View style={{
+                opacity: actionButtonAnimations[2],
+                transform: [{
+                  scale: actionButtonAnimations[2].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  })
+                }]
+              }}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => router.push('/reflection')}
+                >
+                  <MessageCircle color="#FFD700" size={24} />
+                  <Text style={styles.actionText}>Reflection</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+          </Animated.View>
 
           {/* Today Preview */}
-          <Card style={styles.previewCard}>
-            <Text style={styles.cardTitle}>Today&apos;s Summary</Text>
-            <View style={styles.previewStats}>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{completionPercentage}%</Text>
-                <Text style={styles.statLabel}>Daily Check-in Completed</Text>
+          <Animated.View style={{
+            opacity: cardAnimations[3],
+            transform: [{
+              translateY: cardAnimations[3].interpolate({
+                inputRange: [0, 1],
+                outputRange: [30, 0],
+              })
+            }]
+          }}>
+            <Card style={styles.previewCard}>
+              <Text style={styles.cardTitle}>Today&apos;s Summary</Text>
+              <View style={styles.previewStats}>
+                <View style={styles.stat}>
+                  <Text style={styles.statNumber}>{completionPercentage}%</Text>
+                  <Text style={styles.statLabel}>Daily Check-in Completed</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statNumber}>{todayEntries}</Text>
+                  <Text style={styles.statLabel}>Entries</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statNumber}>{gratitudeStreak}</Text>
+                  <Text style={styles.statLabel}>Gratitude</Text>
+                </View>
               </View>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{todayEntries}</Text>
-                <Text style={styles.statLabel}>Entries</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{gratitudeStreak}</Text>
-                <Text style={styles.statLabel}>Gratitude</Text>
-              </View>
-            </View>
-          </Card>
+            </Card>
+          </Animated.View>
           
           {/* Heavy Days Suggestion Card */}
           {showHeavyCard && (
-            <Card style={styles.suggestionCard}>
-              <View style={styles.suggestionHeader}>
-                <View style={styles.suggestionTitleContainer}>
-                  <Text style={styles.suggestionTitle}>It&apos;s been a heavy few days 💙</Text>
-                  <Text style={styles.suggestionText}>Would you like a quick tip to recharge?</Text>
+            <Animated.View style={{
+              opacity: cardAnimations[4],
+              transform: [{
+                translateY: cardAnimations[4].interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [30, 0],
+                })
+              }]
+            }}>
+              <Card style={styles.suggestionCard}>
+                <View style={styles.suggestionHeader}>
+                  <View style={styles.suggestionTitleContainer}>
+                    <Text style={styles.suggestionTitle}>It&apos;s been a heavy few days 💙</Text>
+                    <Text style={styles.suggestionText}>Would you like a quick tip to recharge?</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.dismissButton}
+                    onPress={handleHeavyCardDismiss}
+                  >
+                    <X color="#999" size={20} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity 
-                  style={styles.dismissButton}
-                  onPress={handleHeavyCardDismiss}
-                >
-                  <X color="#999" size={20} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.suggestionActions}>
-                <TouchableOpacity 
-                  style={styles.suggestionButton}
-                  onPress={() => {
-                    setShowHeavyCard(false);
-                    router.push('/breathing');
-                  }}
-                >
-                  <Wind color="#60a5fa" size={16} />
-                  <Text style={styles.suggestionButtonText}>Breathing</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.suggestionButton}
-                  onPress={() => {
-                    setShowHeavyCard(false);
-                    router.push('/gratitude');
-                  }}
-                >
-                  <Heart color="#fbbf24" size={16} />
-                  <Text style={styles.suggestionButtonText}>Gratitude</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.suggestionButton}
-                  onPress={() => {
-                    setShowHeavyCard(false);
-                    router.push('/reflection');
-                  }}
-                >
-                  <MessageCircle color="#8b5cf6" size={16} />
-                  <Text style={styles.suggestionButtonText}>Reflection</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.suggestionSubtext}>Some stretches are harder than others. Small steps count.</Text>
-            </Card>
+                <View style={styles.suggestionActions}>
+                  <TouchableOpacity 
+                    style={styles.suggestionButton}
+                    onPress={() => {
+                      setShowHeavyCard(false);
+                      router.push('/breathing');
+                    }}
+                  >
+                    <Wind color="#60a5fa" size={16} />
+                    <Text style={styles.suggestionButtonText}>Breathing</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.suggestionButton}
+                    onPress={() => {
+                      setShowHeavyCard(false);
+                      router.push('/gratitude');
+                    }}
+                  >
+                    <Heart color="#fbbf24" size={16} />
+                    <Text style={styles.suggestionButtonText}>Gratitude</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.suggestionButton}
+                    onPress={() => {
+                      setShowHeavyCard(false);
+                      router.push('/reflection');
+                    }}
+                  >
+                    <MessageCircle color="#8b5cf6" size={16} />
+                    <Text style={styles.suggestionButtonText}>Reflection</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.suggestionSubtext}>Some stretches are harder than others. Small steps count.</Text>
+              </Card>
+            </Animated.View>
           )}
         </Animated.View>
       </ScrollView>

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Animated,
+  Easing,
 } from 'react-native';
 import { CheckIn } from '@/stores/checkInStore';
 
@@ -20,44 +22,93 @@ const SLOTS: { key: CheckIn['slot']; label: string; emoji: string }[] = [
 ];
 
 export default function CheckInProgress({ todayCheckIns, onSlotPress }: CheckInProgressProps) {
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const slotAnimations = useRef(
+    SLOTS.map(() => new Animated.Value(0))
+  ).current;
+
   const getSlotStatus = (slot: CheckIn['slot']) => {
     return todayCheckIns.find(checkIn => checkIn.slot === slot) ? 'completed' : 'pending';
   };
+
+  useEffect(() => {
+    // Animate progress bar
+    const targetProgress = (todayCheckIns.length / 4) * 100;
+    Animated.timing(progressAnim, {
+      toValue: targetProgress,
+      duration: 800,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+
+    // Animate slot chips
+    const slotStaggerAnimations = slotAnimations.map((anim, index) => {
+      const isCompleted = getSlotStatus(SLOTS[index].key) === 'completed';
+      return Animated.timing(anim, {
+        toValue: isCompleted ? 1 : 0.7,
+        duration: 600,
+        delay: index * 100,
+        easing: Easing.out(Easing.back(1.2)),
+        useNativeDriver: true,
+      });
+    });
+
+    Animated.parallel(slotStaggerAnimations).start();
+  }, [todayCheckIns.length]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Today&apos;s Check-ins</Text>
       <View style={styles.slotsContainer}>
-        {SLOTS.map((slot) => {
+        {SLOTS.map((slot, index) => {
           const status = getSlotStatus(slot.key);
           const isCompleted = status === 'completed';
+          const slotAnim = slotAnimations[index];
           
           return (
-            <TouchableOpacity
+            <Animated.View
               key={slot.key}
-              style={[
-                styles.slotChip,
-                isCompleted ? styles.completedChip : styles.pendingChip,
-              ]}
-              onPress={() => !isCompleted && onSlotPress(slot.key)}
-              disabled={isCompleted}
+              style={{
+                flex: 1,
+                opacity: slotAnim,
+                transform: [{
+                  scale: slotAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  })
+                }]
+              }}
             >
-              <Text style={styles.slotEmoji}>{slot.emoji}</Text>
-              <Text style={[
-                styles.slotLabel,
-                isCompleted ? styles.completedLabel : styles.pendingLabel,
-              ]}>
-                {isCompleted ? '✓' : '+'} {slot.label}
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.slotChip,
+                  isCompleted ? styles.completedChip : styles.pendingChip,
+                ]}
+                onPress={() => !isCompleted && onSlotPress(slot.key)}
+                disabled={isCompleted}
+              >
+                <Text style={styles.slotEmoji}>{slot.emoji}</Text>
+                <Text style={[
+                  styles.slotLabel,
+                  isCompleted ? styles.completedLabel : styles.pendingLabel,
+                ]}>
+                  {isCompleted ? '✓' : '+'} {slot.label}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
           );
         })}
       </View>
       <View style={styles.progressBar}>
-        <View 
+        <Animated.View 
           style={[
             styles.progressFill,
-            { width: `${(todayCheckIns.length / 4) * 100}%` }
+            { 
+              width: progressAnim.interpolate({
+                inputRange: [0, 100],
+                outputRange: ['0%', '100%'],
+              })
+            }
           ]} 
         />
       </View>
@@ -84,7 +135,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   slotChip: {
-    flex: 1,
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 8,

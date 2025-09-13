@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
@@ -30,10 +32,60 @@ export default function DashboardScreen() {
   const { entries } = useJournalStore();
   const { width } = useWindowDimensions();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('Week');
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const chartAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+  const periodSelectorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadCheckIns();
     loadUserSettings();
+    
+    // Start entrance animations
+    const animations = [
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.back(1.1)),
+        useNativeDriver: true,
+      }),
+      Animated.timing(periodSelectorAnim, {
+        toValue: 1,
+        duration: 500,
+        delay: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ];
+
+    // Stagger chart animations
+    const chartStaggerAnimations = chartAnimations.map((anim, index) => 
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 700,
+        delay: 400 + (index * 200),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+
+    Animated.parallel([
+      ...animations,
+      ...chartStaggerAnimations,
+    ]).start();
   }, [loadCheckIns, loadUserSettings]);
 
   const handlePeriodChange = useCallback((period: Period) => {
@@ -158,7 +210,18 @@ export default function DashboardScreen() {
       </View>
 
       {/* Period Selector */}
-      <View style={styles.periodSelector}>
+      <Animated.View style={[
+        styles.periodSelector,
+        {
+          opacity: periodSelectorAnim,
+          transform: [{
+            translateY: periodSelectorAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-20, 0],
+            })
+          }]
+        }
+      ]}>
         {(['Week', 'Month', 'Year'] as Period[]).map((period) => (
           <TouchableOpacity
             key={period}
@@ -181,11 +244,29 @@ export default function DashboardScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </Animated.View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView 
+        style={[
+          styles.content,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]} 
+        showsVerticalScrollIndicator={false}
+      >
         {/* Wellbeing Score */}
-        <Card style={styles.scoreCard}>
+        <Animated.View style={{
+          opacity: chartAnimations[0],
+          transform: [{
+            translateY: chartAnimations[0].interpolate({
+              inputRange: [0, 1],
+              outputRange: [40, 0],
+            })
+          }]
+        }}>
+          <Card style={styles.scoreCard}>
           <View style={styles.scoreContent}>
             <View style={styles.scoreTextContainer}>
               <Text style={styles.scoreTitle}>Wellbeing Score</Text>
@@ -215,12 +296,22 @@ export default function DashboardScreen() {
               />
             </View>
           </View>
-        </Card>
+          </Card>
+        </Animated.View>
 
         {/* Mood Trend Chart */}
-        <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Mood Trend</Text>
-          <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
+        <Animated.View style={{
+          opacity: chartAnimations[1],
+          transform: [{
+            translateY: chartAnimations[1].interpolate({
+              inputRange: [0, 1],
+              outputRange: [40, 0],
+            })
+          }]
+        }}>
+          <Card style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Mood Trend</Text>
+            <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
           {Platform.OS !== 'web' ? (
             <View style={styles.chartContainer}>
               <LineChart
@@ -297,12 +388,22 @@ export default function DashboardScreen() {
               </View>
             </View>
           )}
-        </Card>
+          </Card>
+        </Animated.View>
 
         {/* Stress Chart */}
-        <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Stress Levels</Text>
-          <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
+        <Animated.View style={{
+          opacity: chartAnimations[2],
+          transform: [{
+            translateY: chartAnimations[2].interpolate({
+              inputRange: [0, 1],
+              outputRange: [40, 0],
+            })
+          }]
+        }}>
+          <Card style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Stress Levels</Text>
+            <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
           {Platform.OS !== 'web' ? (
             <View style={styles.chartContainer}>
               <LineChart
@@ -379,12 +480,22 @@ export default function DashboardScreen() {
               </View>
             </View>
           )}
-        </Card>
+          </Card>
+        </Animated.View>
         
         {/* Energy Chart */}
-        <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Energy Levels</Text>
-          <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
+        <Animated.View style={{
+          opacity: chartAnimations[3],
+          transform: [{
+            translateY: chartAnimations[3].interpolate({
+              inputRange: [0, 1],
+              outputRange: [40, 0],
+            })
+          }]
+        }}>
+          <Card style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Energy Levels</Text>
+            <Text style={styles.chartLegend}>Avg per day from your check-ins</Text>
           {Platform.OS !== 'web' ? (
             <View style={styles.chartContainer}>
               <LineChart
@@ -461,23 +572,44 @@ export default function DashboardScreen() {
               </View>
             </View>
           )}
-        </Card>
+          </Card>
+        </Animated.View>
 
         {/* Gratitude Streak */}
-        <Card style={styles.streakCard}>
-          <Text style={styles.streakTitle}>🙏 Gratitude Streak</Text>
-          <Text style={styles.streakNumber}>{gratitudeStreak} days</Text>
-          <Text style={styles.streakSubtitle}>Keep it up!</Text>
-        </Card>
+        <Animated.View style={{
+          opacity: chartAnimations[0],
+          transform: [{
+            scale: chartAnimations[0].interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.9, 1],
+            })
+          }]
+        }}>
+          <Card style={styles.streakCard}>
+            <Text style={styles.streakTitle}>🙏 Gratitude Streak</Text>
+            <Text style={styles.streakNumber}>{gratitudeStreak} days</Text>
+            <Text style={styles.streakSubtitle}>Keep it up!</Text>
+          </Card>
+        </Animated.View>
 
         {/* Insights */}
-        <Card style={styles.insightsCard}>
-          <Text style={styles.insightsTitle}>💡 Insights</Text>
-          <Text style={styles.insightsText}>
-            {getInsightText(chartData.metricAverages)}
-          </Text>
-        </Card>
-      </ScrollView>
+        <Animated.View style={{
+          opacity: chartAnimations[1],
+          transform: [{
+            translateY: chartAnimations[1].interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            })
+          }]
+        }}>
+          <Card style={styles.insightsCard}>
+            <Text style={styles.insightsTitle}>💡 Insights</Text>
+            <Text style={styles.insightsText}>
+              {getInsightText(chartData.metricAverages)}
+            </Text>
+          </Card>
+        </Animated.View>
+      </Animated.ScrollView>
     </View>
   );
 }

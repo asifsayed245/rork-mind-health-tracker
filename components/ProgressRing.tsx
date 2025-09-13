@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet, Platform } from 'react-native';
+import { View, Animated, StyleSheet, Platform, Easing } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 interface ProgressRingProps {
@@ -27,7 +27,8 @@ export default function ProgressRing({
     if (Platform.OS !== 'web') {
       Animated.timing(animatedValue, {
         toValue: progress,
-        duration: 1000,
+        duration: 1200,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start();
     }
