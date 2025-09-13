@@ -49,19 +49,25 @@ export default function HomeScreen() {
     }
 
     const initializeData = async () => {
-      await Promise.all([
-        loadProfile(),
-        loadCheckIns(),
-        loadActivitySessions(),
-        loadEntries(),
-        loadUserSettings(),
-      ]);
-      
-      // Check if heavy card should be shown
-      const shouldShow = shouldShowHeavyCard();
-      if (shouldShow) {
-        setShowHeavyCard(true);
-        markHeavyCardShown();
+      try {
+        await Promise.all([
+          loadProfile(),
+          loadActivitySessions(),
+          loadUserSettings(),
+        ]);
+        
+        // Load data from stores
+        await loadCheckIns();
+        await loadEntries();
+        
+        // Check if heavy card should be shown
+        const shouldShow = shouldShowHeavyCard();
+        if (shouldShow) {
+          setShowHeavyCard(true);
+          markHeavyCardShown();
+        }
+      } catch (error) {
+        console.error('Failed to initialize data:', error);
       }
     };
     
@@ -72,7 +78,7 @@ export default function HomeScreen() {
       duration: 800,
       useNativeDriver: true,
     }).start();
-  }, [isAuthenticated, loadProfile, loadCheckIns, loadActivitySessions, loadEntries, loadUserSettings, shouldShowHeavyCard, markHeavyCardShown, fadeAnim]);
+  }, [isAuthenticated]);
 
   const handleSlotPress = useCallback((slot: CheckIn['slot']) => {
     setSelectedSlot(slot);

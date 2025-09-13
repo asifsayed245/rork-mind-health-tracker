@@ -156,16 +156,20 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
   }, [addCheckInMutation, checkIns, convertDbCheckInToLocal]);
 
   const loadCheckIns = useCallback(async () => {
-    if (checkInsQuery.data) {
-      updateCheckInsFromData(checkInsQuery.data as DbCheckIn[]);
-    } else if (checkInsQuery.error) {
-      console.error('Failed to load check-ins from database, trying AsyncStorage:', checkInsQuery.error);
+    try {
+      // Always try to load from AsyncStorage first for immediate data
       await loadFromAsyncStorage();
-    } else if (!checkInsQuery.isLoading) {
-      // Trigger refetch if not loading and no data
-      checkInsQuery.refetch();
+      
+      // Then try to fetch fresh data from server
+      const result = await checkInsQuery.refetch();
+      if (result.data) {
+        updateCheckInsFromData(result.data as DbCheckIn[]);
+      }
+    } catch (error) {
+      console.error('Failed to load check-ins:', error);
+      // AsyncStorage was already loaded above, so we're good
     }
-  }, [checkInsQuery, updateCheckInsFromData, loadFromAsyncStorage]);
+  }, [checkInsQuery.refetch, updateCheckInsFromData, loadFromAsyncStorage]);
       
   const getTodayCheckIns = useCallback(() => {
     return todayCheckIns;

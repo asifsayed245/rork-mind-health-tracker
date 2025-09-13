@@ -115,16 +115,20 @@ export const [JournalProvider, useJournalStore] = createContextHook(() => {
   }, [addEntryMutation, entries, convertDbEntryToLocal]);
 
   const loadEntries = useCallback(async () => {
-    if (entriesQuery.data) {
-      updateEntriesFromData(entriesQuery.data as DbJournalEntry[]);
-    } else if (entriesQuery.error) {
-      console.error('Failed to load journal entries from database, trying AsyncStorage:', entriesQuery.error);
+    try {
+      // Always try to load from AsyncStorage first for immediate data
       await loadFromAsyncStorage();
-    } else if (!entriesQuery.isLoading) {
-      // Trigger refetch if not loading and no data
-      entriesQuery.refetch();
+      
+      // Then try to fetch fresh data from server
+      const result = await entriesQuery.refetch();
+      if (result.data) {
+        updateEntriesFromData(result.data as DbJournalEntry[]);
+      }
+    } catch (error) {
+      console.error('Failed to load journal entries:', error);
+      // AsyncStorage was already loaded above, so we're good
     }
-  }, [entriesQuery, updateEntriesFromData, loadFromAsyncStorage]);
+  }, [entriesQuery.refetch, updateEntriesFromData, loadFromAsyncStorage]);
       
   const getEntriesByType = useCallback((type: string) => {
     if (type === 'all') return entries;
