@@ -5,6 +5,7 @@ import React, { useEffect } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import { trpc, trpcClient } from "@/lib/trpc";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,11 +30,13 @@ export default function RootLayout() {
   const GestureWrapper = Platform.OS === 'web' ? View : GestureHandlerRootView;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <GestureWrapper style={{ flex: 1 }}>
-        <StatusBar style="light" backgroundColor="#1a1a1a" />
-        <RootLayoutNav />
-      </GestureWrapper>
-    </QueryClientProvider>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <GestureWrapper style={{ flex: 1 }}>
+          <StatusBar style="light" backgroundColor="#1a1a1a" />
+          <RootLayoutNav />
+        </GestureWrapper>
+      </QueryClientProvider>
+    </trpc.Provider>
   );
 }
