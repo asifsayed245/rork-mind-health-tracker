@@ -161,6 +161,9 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+-- Drop existing trigger if it exists
+DROP TRIGGER IF EXISTS update_user_settings_updated_at ON public.user_settings;
+
 -- Create trigger for user_settings updated_at
 CREATE TRIGGER update_user_settings_updated_at 
     BEFORE UPDATE ON public.user_settings 
