@@ -13,14 +13,24 @@ import { ArrowLeft, User, Mail, Calendar, Save } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/stores/authStore';
 import { useUserStore } from '@/stores/userStore';
+import { useCheckInStore } from '@/stores/checkInStore';
+import { useJournalStore } from '@/stores/journalStore';
 import Card from '@/components/Card';
 
 export default function ProfileScreen() {
   const { user } = useAuth();
   const { profile, updateProfile } = useUserStore();
+  const { checkIns, getStreak, activitySessions } = useCheckInStore();
+  const { entries } = useJournalStore();
   const [name, setName] = useState(profile?.name || '');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Calculate real statistics
+  const totalCheckIns = checkIns.length;
+  const currentStreak = getStreak();
+  const totalJournalEntries = entries.length;
+  const totalActivitySessions = activitySessions.length;
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -171,19 +181,19 @@ export default function ProfileScreen() {
           
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profile?.totalCheckIns || 0}</Text>
+              <Text style={styles.statNumber}>{totalCheckIns}</Text>
               <Text style={styles.statLabel}>Check-ins</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profile?.currentStreak || 0}</Text>
+              <Text style={styles.statNumber}>{currentStreak}</Text>
               <Text style={styles.statLabel}>Day Streak</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profile?.totalJournalEntries || 0}</Text>
+              <Text style={styles.statNumber}>{totalJournalEntries}</Text>
               <Text style={styles.statLabel}>Journal Entries</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profile?.totalActivitySessions || 0}</Text>
+              <Text style={styles.statNumber}>{totalActivitySessions}</Text>
               <Text style={styles.statLabel}>Activities</Text>
             </View>
           </View>
