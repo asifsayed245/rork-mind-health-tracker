@@ -8,9 +8,5 @@
     },
     "runtime": "bun",
     "autoStart": true
-  },
-  "frontend": {
-    "framework": "expo",
-    "port": 19006
   }
 }
