@@ -1,7 +1,6 @@
 import { createTRPCRouter, publicProcedure } from "./create-context";
 
 // Import all your route procedures
-import hiRoute from "./routes/example/hi/route";
 import { 
   getUserProfileProcedure, 
   updateUserProfileProcedure, 
@@ -20,11 +19,14 @@ import {
   getJournalEntryCountsProcedure 
 } from "./routes/journal/route";
 
+// Comment out the hi route temporarily to test if it's causing issues
+// import hiRoute from "./routes/example/hi/route";
+
 export const appRouter = createTRPCRouter({
-  // Example routes
-  example: createTRPCRouter({
-    hi: hiRoute,
-  }),
+  // Comment out example routes for now
+  // example: createTRPCRouter({
+  //   hi: hiRoute,
+  // }),
   
   // Health check routes
   health: createTRPCRouter({
