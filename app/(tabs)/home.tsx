@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scoreCenterNumber: {
-    color: '#FFFFFF',
+    color: '#000000',
     fontSize: 16,
     fontWeight: 'bold',
   },
