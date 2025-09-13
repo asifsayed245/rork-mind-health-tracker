@@ -1,0 +1,16 @@
+{
+  "backend": {
+    "enabled": true,
+    "entry": "backend/server.ts",
+    "port": 3001,
+    "routes": {
+      "/api": "backend/hono.ts"
+    },
+    "runtime": "bun",
+    "autoStart": true
+  },
+  "frontend": {
+    "framework": "expo",
+    "port": 19006
+  }
+}
