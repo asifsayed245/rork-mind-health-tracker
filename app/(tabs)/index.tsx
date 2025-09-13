@@ -10,93 +10,78 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Heart, Wind, MessageCircle, X } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUserStore } from '@/stores/userStore';
+import { useCheckInStore, CheckIn } from '@/stores/checkInStore';
+import { useJournalStore } from '@/stores/journalStore';
 import Card from '@/components/Card';
 import ProgressRing from '@/components/ProgressRing';
 import CheckInProgress from '@/components/CheckInProgress';
 import QuickCheckInModal from '@/components/QuickCheckInModal';
-import type { Tables } from '@/lib/supabase';
-
-type CheckIn = Tables<'check_ins'>;
-type CheckInSlot = 'morning' | 'afternoon' | 'evening' | 'night';
-
-interface CheckInData {
-  slot: CheckInSlot;
-  mood: number;
-  stress: number;
-  energy: number;
-  note?: string;
-}
 
 export default function HomeScreen() {
+  const { profile, loadProfile } = useUserStore();
+  const { 
+    todayCheckIns, 
+    loadCheckIns, 
+    addCheckIn, 
+ 
+    getStreak, 
+    getDailyScore,
+    loadActivitySessions,
+    loadUserSettings,
+    shouldShowHeavyCard,
+    markHeavyCardShown,
+    markHeavyCardDismissed
+  } = useCheckInStore();
+  const { entries, loadEntries } = useJournalStore();
   const [showCheckInModal, setShowCheckInModal] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<CheckInSlot | undefined>();
+  const [selectedSlot, setSelectedSlot] = useState<CheckIn['slot'] | undefined>();
   const [showHeavyCard, setShowHeavyCard] = useState(false);
-  const { user, loading: authLoading } = useAuth();
 
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
-  // tRPC queries - only run when user is authenticated
-  const profileQuery = trpc.user.getProfile.useQuery(undefined, {
-    enabled: !!user && !authLoading,
-  });
-  const todayCheckInsQuery = trpc.checkIns.getToday.useQuery(undefined, {
-    enabled: !!user && !authLoading,
-  });
-  const journalEntriesQuery = trpc.journal.getEntries.useQuery({ type: 'all' }, {
-    enabled: !!user && !authLoading,
-  });
-
-  const profile = profileQuery.data;
-  const todayCheckIns = todayCheckInsQuery.data || [];
-  const entries = journalEntriesQuery.data || [];
-
-  // Debug logging
-  console.log('Home - Auth & tRPC Query Status:', {
-    auth: { hasUser: !!user, authLoading, userId: user?.id },
-    profile: { loading: profileQuery.isLoading, error: profileQuery.isError, errorMsg: profileQuery.error?.message },
-    checkIns: { loading: todayCheckInsQuery.isLoading, error: todayCheckInsQuery.isError, errorMsg: todayCheckInsQuery.error?.message },
-    journal: { loading: journalEntriesQuery.isLoading, error: journalEntriesQuery.isError, errorMsg: journalEntriesQuery.error?.message }
-  });
-
   useEffect(() => {
+    const initializeData = async () => {
+      await Promise.all([
+        loadProfile(),
+        loadCheckIns(),
+        loadActivitySessions(),
+        loadEntries(),
+        loadUserSettings(),
+      ]);
+      
+      // Check if heavy card should be shown
+      const shouldShow = shouldShowHeavyCard();
+      if (shouldShow) {
+        setShowHeavyCard(true);
+        markHeavyCardShown();
+      }
+    };
+    
+    initializeData();
+    
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 800,
       useNativeDriver: true,
     }).start();
-  }, [fadeAnim]);
+  }, [loadProfile, loadCheckIns, loadActivitySessions, loadEntries, loadUserSettings, shouldShowHeavyCard, markHeavyCardShown, fadeAnim]);
 
-  // Calculate streak based on check-ins
-  const getStreak = () => {
-    // Simple streak calculation - count consecutive days with check-ins
-    // This is a simplified version, you might want to implement more complex logic
-    return Math.min(todayCheckIns.length * 2, 10); // Placeholder calculation
-  };
-
-  // Calculate daily score based on completed check-ins
-  const getDailyScore = () => {
-    const totalSlots = 4; // morning, afternoon, evening, night
-    const completedSlots = todayCheckIns.length;
-    return Math.round((completedSlots / totalSlots) * 100);
-  };
-
-  const handleSlotPress = useCallback((slot: CheckInSlot) => {
+  const handleSlotPress = useCallback((slot: CheckIn['slot']) => {
     setSelectedSlot(slot);
     setShowCheckInModal(true);
   }, []);
   
-  const handleCheckInSave = useCallback(async (checkInData: CheckInData) => {
-    // Refetch today's check-ins after saving
-    await todayCheckInsQuery.refetch();
+  const handleCheckInSave = useCallback(async (checkInData: Omit<CheckIn, 'id' | 'timestampISO'>) => {
+    await addCheckIn(checkInData);
     setShowCheckInModal(false);
     setSelectedSlot(undefined);
-  }, [todayCheckInsQuery]);
+  }, [addCheckIn]);
   
   const handleHeavyCardDismiss = useCallback(() => {
     setShowHeavyCard(false);
-  }, []);
+    markHeavyCardDismissed();
+  }, [markHeavyCardDismissed]);
 
 
   const streak = getStreak();
@@ -121,24 +106,6 @@ export default function HomeScreen() {
     }, 0);
 
   const insets = useSafeAreaInsets();
-
-  // Show loading state while auth is loading
-  if (authLoading) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
-
-  // Show error state if not authenticated
-  if (!user) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>Please log in to continue</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -471,14 +438,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
   },
 });

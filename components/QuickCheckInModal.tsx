@@ -12,24 +12,15 @@ import {
   Platform,
 } from 'react-native';
 import { X } from 'lucide-react-native';
-import { trpc } from '@/lib/trpc';
+import { CheckIn } from '@/stores/checkInStore';
+import { useJournalStore } from '@/stores/journalStore';
 import MoodSelector from './MoodSelector';
-
-type CheckInSlot = 'morning' | 'afternoon' | 'evening' | 'night';
-
-interface CheckInData {
-  slot: CheckInSlot;
-  mood: number;
-  stress: number;
-  energy: number;
-  note?: string;
-}
 
 interface QuickCheckInModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (data: CheckInData) => void;
-  preselectedSlot?: CheckInSlot;
+  onSave: (data: Omit<CheckIn, 'id' | 'timestampISO'>) => void;
+  preselectedSlot?: CheckIn['slot'];
 }
 
 const SLOT_LABELS = {
@@ -52,15 +43,12 @@ export default function QuickCheckInModal({
   onSave, 
   preselectedSlot 
 }: QuickCheckInModalProps) {
-  const [selectedSlot, setSelectedSlot] = useState<CheckInSlot>(preselectedSlot || 'morning');
+  const { addEntry } = useJournalStore();
+  const [selectedSlot, setSelectedSlot] = useState<CheckIn['slot']>(preselectedSlot || 'morning');
   const [mood, setMood] = useState<number>(3);
   const [stress, setStress] = useState<number>(3);
   const [energy, setEnergy] = useState<number>(3);
   const [note, setNote] = useState<string>('');
-
-  // tRPC mutations
-  const createCheckInMutation = trpc.checkIns.create.useMutation();
-  const createJournalEntryMutation = trpc.journal.create.useMutation();
 
   // Update selected slot when preselectedSlot changes
   useEffect(() => {
@@ -70,74 +58,44 @@ export default function QuickCheckInModal({
   }, [preselectedSlot]);
 
   const handleSave = async () => {
-    try {
-      const checkInData: CheckInData = {
-        slot: selectedSlot,
+    const checkInData: Omit<CheckIn, 'id' | 'timestampISO'> = {
+      slot: selectedSlot,
+      mood,
+      stress,
+      energy,
+      note: note.trim() || undefined,
+    };
+
+    // Save the check-in
+    onSave(checkInData);
+    
+    // If there's a note, save it to the journal as well
+    if (note.trim()) {
+      await addEntry({
+        type: 'free',
+        title: `${SLOT_LABELS[selectedSlot]} Check-in Note`,
+        content: note.trim(),
         mood,
-        stress,
-        energy,
-        note: note.trim() || undefined,
-      };
-
-      console.log('Saving check-in:', checkInData);
-
-      // Save the check-in
-      const savedCheckIn = await createCheckInMutation.mutateAsync(checkInData);
-      console.log('Check-in saved successfully:', savedCheckIn);
-      
-      // If there's a note, save it to the journal as well
-      if (note.trim()) {
-        try {
-          const journalEntry = await createJournalEntryMutation.mutateAsync({
-            type: 'free',
-            title: `${SLOT_LABELS[selectedSlot]} Check-in Note`,
-            content: note.trim(),
-            mood,
-            tags: [selectedSlot, 'check-in'],
-          });
-          console.log('Journal entry saved successfully:', journalEntry);
-        } catch (journalError) {
-          console.error('Error saving journal entry:', journalError);
-          // Don't fail the whole operation if journal save fails
-        }
-      }
-      
-      // Call the onSave callback
-      onSave(checkInData);
-      
-      // Reset form
-      setMood(3);
-      setStress(3);
-      setEnergy(3);
-      setNote('');
-      
-      // Close modal first
-      onClose();
-      
-      // Show success message after a brief delay
-      setTimeout(() => {
-        Alert.alert(
-          'Check-in Saved ✔️',
-          SLOT_MESSAGES[selectedSlot]
-        );
-      }, 100);
-    } catch (error) {
-      console.error('Error saving check-in:', error);
-      
-      let errorMessage = 'Failed to save check-in. Please try again.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch')) {
-          errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
-        } else if (error.message.includes('UNAUTHORIZED')) {
-          errorMessage = 'You need to be logged in to save check-ins.';
-        } else {
-          errorMessage = `Error: ${error.message}`;
-        }
-      }
-      
-      Alert.alert('Error', errorMessage);
+        tags: [selectedSlot, 'check-in'],
+      });
     }
+    
+    // Reset form
+    setMood(3);
+    setStress(3);
+    setEnergy(3);
+    setNote('');
+    
+    // Close modal first
+    onClose();
+    
+    // Show success message after a brief delay
+    setTimeout(() => {
+      Alert.alert(
+        'Check-in Saved ✔️',
+        SLOT_MESSAGES[selectedSlot]
+      );
+    }, 100);
   };
 
   const handleClose = () => {
@@ -187,7 +145,7 @@ export default function QuickCheckInModal({
                       isSelected && styles.selectedSlotButton,
                       isDisabled && styles.disabledSlotButton,
                     ]}
-                    onPress={() => !isDisabled && setSelectedSlot(key as CheckInSlot)}
+                    onPress={() => !isDisabled && setSelectedSlot(key as CheckIn['slot'])}
                     disabled={isDisabled}
                   >
                     <Text

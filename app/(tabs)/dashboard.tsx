@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,92 +10,39 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
-import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCheckInStore, DailyAggregate } from '@/stores/checkInStore';
+import { useUserStore } from '@/stores/userStore';
+import { useJournalStore } from '@/stores/journalStore';
 import Card from '@/components/Card';
 import ProgressRing from '@/components/ProgressRing';
-import { BackendStatus } from '@/components/BackendStatus';
-import type { Tables } from '@/lib/supabase';
-
-type CheckIn = Tables<'check_ins'>;
-type JournalEntry = Tables<'journal_entries'>;
-
-interface DailyAggregate {
-  date: string;
-  moodAvg: number;
-  stressAvg: number;
-  energyAvg: number;
-  slotsCount: number;
-}
 
 const { width } = Dimensions.get('window');
 
 type Period = 'Week' | 'Month' | 'Year';
 
 export default function DashboardScreen() {
+  const { 
+    checkIns, 
+    loadCheckIns, 
+    loadUserSettings,
+    getDailyAggregates 
+  } = useCheckInStore();
+  const { profile } = useUserStore();
+  const { entries } = useJournalStore();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('Week');
-  const { user, loading: authLoading } = useAuth();
 
-  // tRPC queries - only run when user is authenticated
-  const profileQuery = trpc.user.getProfile.useQuery(undefined, {
-    enabled: !!user && !authLoading,
-  });
-  const checkInsQuery = trpc.checkIns.getAll.useQuery({}, {
-    enabled: !!user && !authLoading,
-  });
-  const journalEntriesQuery = trpc.journal.getEntries.useQuery({ type: 'all' }, {
-    enabled: !!user && !authLoading,
-  });
-
-  const profile = profileQuery.data;
-  const checkIns = checkInsQuery.data || [];
-  const entries = journalEntriesQuery.data || [];
-
-  // Log query states for debugging
-  console.log('Dashboard - Auth & Query states:', {
-    auth: { hasUser: !!user, authLoading, userId: user?.id },
-    profile: { isLoading: profileQuery.isLoading, isError: profileQuery.isError, hasData: !!profileQuery.data, error: profileQuery.error?.message },
-    checkIns: { isLoading: checkInsQuery.isLoading, isError: checkInsQuery.isError, hasData: !!checkInsQuery.data, error: checkInsQuery.error?.message },
-    journal: { isLoading: journalEntriesQuery.isLoading, isError: journalEntriesQuery.isError, hasData: !!journalEntriesQuery.data, error: journalEntriesQuery.error?.message }
-  });
-
-  const getDailyAggregates = (dates: string[]): DailyAggregate[] => {
-    return dates.map(date => {
-      const dayCheckIns = checkIns.filter(checkIn => 
-        checkIn.timestamp_iso.startsWith(date)
-      );
-      
-      if (dayCheckIns.length === 0) {
-        return {
-          date,
-          moodAvg: 0,
-          stressAvg: 0,
-          energyAvg: 0,
-          slotsCount: 0,
-        };
-      }
-      
-      const moodSum = dayCheckIns.reduce((sum, checkIn) => sum + checkIn.mood, 0);
-      const stressSum = dayCheckIns.reduce((sum, checkIn) => sum + checkIn.stress, 0);
-      const energySum = dayCheckIns.reduce((sum, checkIn) => sum + checkIn.energy, 0);
-      
-      return {
-        date,
-        moodAvg: moodSum / dayCheckIns.length,
-        stressAvg: stressSum / dayCheckIns.length,
-        energyAvg: energySum / dayCheckIns.length,
-        slotsCount: dayCheckIns.length,
-      };
-    });
-  };
+  useEffect(() => {
+    loadCheckIns();
+    loadUserSettings();
+  }, [loadCheckIns, loadUserSettings]);
 
   const handlePeriodChange = useCallback((period: Period) => {
-    if ((period === 'Month' || period === 'Year') && !profile?.is_premium) {
+    if ((period === 'Month' || period === 'Year') && !profile?.isPremium) {
       // Show paywall modal
       return;
     }
     setSelectedPeriod(period);
-  }, [profile?.is_premium]);
+  }, [profile?.isPremium]);
 
   const getChartData = () => {
     const now = new Date();
@@ -176,58 +123,11 @@ export default function DashboardScreen() {
 
   const insets = useSafeAreaInsets();
 
-  // Show loading state while auth is loading
-  if (authLoading) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
-
-  // Show error state if not authenticated
-  if (!user) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>Please log in to view your dashboard</Text>
-      </View>
-    );
-  }
-
-  // Show backend connection error if all queries are failing
-  const allQueriesError = profileQuery.isError && checkInsQuery.isError && journalEntriesQuery.isError;
-  const isBackendError = profileQuery.error?.message?.includes('Backend server not running') ||
-                        checkInsQuery.error?.message?.includes('Backend server not running') ||
-                        journalEntriesQuery.error?.message?.includes('Backend server not running');
-
-  if (allQueriesError && isBackendError) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <Text style={styles.errorTitle}>Backend Server Not Running</Text>
-        <Text style={styles.errorText}>
-          The backend server needs to be started to load your data.
-        </Text>
-        <Text style={styles.errorSubtext}>
-          Please check the setup instructions to start the backend server.
-        </Text>
-      </View>
-    );
-  }
-
-  const handleBackendRetry = () => {
-    // Refetch all queries when backend becomes available
-    profileQuery.refetch();
-    checkInsQuery.refetch();
-    journalEntriesQuery.refetch();
-  };
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Dashboard</Text>
       </View>
-      
-      <BackendStatus onRetry={handleBackendRetry} />
 
       {/* Period Selector */}
       <View style={styles.periodSelector}>
@@ -237,7 +137,7 @@ export default function DashboardScreen() {
             style={[
               styles.periodButton,
               selectedPeriod === period && styles.activePeriodButton,
-              (period === 'Month' || period === 'Year') && !profile?.is_premium && styles.lockedPeriodButton,
+              (period === 'Month' || period === 'Year') && !profile?.isPremium && styles.lockedPeriodButton,
             ]}
             onPress={() => handlePeriodChange(period)}
           >
@@ -245,11 +145,11 @@ export default function DashboardScreen() {
               style={[
                 styles.periodButtonText,
                 selectedPeriod === period && styles.activePeriodButtonText,
-                (period === 'Month' || period === 'Year') && !profile?.is_premium && styles.lockedPeriodButtonText,
+                (period === 'Month' || period === 'Year') && !profile?.isPremium && styles.lockedPeriodButtonText,
               ]}
             >
               {period}
-              {(period === 'Month' || period === 'Year') && !profile?.is_premium && ' 🔒'}
+              {(period === 'Month' || period === 'Year') && !profile?.isPremium && ' 🔒'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -316,9 +216,9 @@ export default function DashboardScreen() {
             <View style={styles.webChartPlaceholder}>
               <Text style={styles.webChartText}>Chart view available on mobile</Text>
               <View style={styles.webChartData}>
-                {chartData.aggregates.map((agg, index) => (
-                  <View key={`mood-${agg.date}-${index}`} style={styles.webDataPoint}>
-                    <Text style={styles.webDataLabel}>{chartData.labels[index]}</Text>
+                {chartData.aggregates.map((agg) => (
+                  <View key={agg.date} style={styles.webDataPoint}>
+                    <Text style={styles.webDataLabel}>{chartData.labels[chartData.aggregates.indexOf(agg)]}</Text>
                     <Text style={styles.webDataValue}>{agg.moodAvg.toFixed(1)}</Text>
                   </View>
                 ))}
@@ -370,9 +270,9 @@ export default function DashboardScreen() {
             <View style={styles.webChartPlaceholder}>
               <Text style={styles.webChartText}>Chart view available on mobile</Text>
               <View style={styles.webChartData}>
-                {chartData.aggregates.map((agg, index) => (
-                  <View key={`stress-${agg.date}-${index}`} style={styles.webDataPoint}>
-                    <Text style={styles.webDataLabel}>{chartData.labels[index]}</Text>
+                {chartData.aggregates.map((agg) => (
+                  <View key={`stress-${agg.date}`} style={styles.webDataPoint}>
+                    <Text style={styles.webDataLabel}>{chartData.labels[chartData.aggregates.indexOf(agg)]}</Text>
                     <Text style={[styles.webDataValue, styles.stressColor]}>{agg.stressAvg.toFixed(1)}</Text>
                   </View>
                 ))}
@@ -424,9 +324,9 @@ export default function DashboardScreen() {
             <View style={styles.webChartPlaceholder}>
               <Text style={styles.webChartText}>Chart view available on mobile</Text>
               <View style={styles.webChartData}>
-                {chartData.aggregates.map((agg, index) => (
-                  <View key={`energy-${agg.date}-${index}`} style={styles.webDataPoint}>
-                    <Text style={styles.webDataLabel}>{chartData.labels[index]}</Text>
+                {chartData.aggregates.map((agg) => (
+                  <View key={`energy-${agg.date}`} style={styles.webDataPoint}>
+                    <Text style={styles.webDataLabel}>{chartData.labels[chartData.aggregates.indexOf(agg)]}</Text>
                     <Text style={[styles.webDataValue, styles.energyColor]}>{agg.energyAvg.toFixed(1)}</Text>
                   </View>
                 ))}
@@ -639,32 +539,5 @@ const styles = StyleSheet.create({
   },
   energyColor: {
     color: '#4ade80',
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  errorTitle: {
-    color: '#f87171',
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  errorText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  errorSubtext: {
-    color: '#999',
-    fontSize: 14,
-    textAlign: 'center',
   },
 });

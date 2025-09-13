@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, X, Mic, MicOff, Edit3, Trash2 } from 'lucide-react-native';
-import { trpc } from '@/lib/trpc';
+import { useJournalStore, JournalEntry } from '@/stores/journalStore';
 import Card from '@/components/Card';
 import MoodSelector from '@/components/MoodSelector';
-import type { Tables } from '@/lib/supabase';
-
-type JournalEntry = Tables<'journal_entries'>;
 
 const entryTypes = [
   { key: 'positive', label: 'Positive', color: '#4ade80', icon: '🙂' },
@@ -29,6 +26,7 @@ const entryTypes = [
 const filterTabs = ['All', 'Positive', 'Negative', 'Gratitude', 'Reflection'];
 
 export default function JournalScreen() {
+  const { entries, loadEntries, addEntry, updateEntry, deleteEntry, getEntryById, canEditEntry, getEntryCounts } = useJournalStore();
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
@@ -39,76 +37,49 @@ export default function JournalScreen() {
   const [mood, setMood] = useState(3);
   const [activeFilter, setActiveFilter] = useState('All');
   const [isRecording, setIsRecording] = useState(false);
+  const [entryCounts, setEntryCounts] = useState({ all: 0, positive: 0, negative: 0, gratitude: 0, reflection: 0 });
 
-  // tRPC queries and mutations
-  const entriesQuery = trpc.journal.getEntries.useQuery({
-    type: activeFilter === 'All' ? 'all' : activeFilter.toLowerCase() as any,
-  });
-  const countsQuery = trpc.journal.getCounts.useQuery();
-  const createMutation = trpc.journal.create.useMutation({
-    onSuccess: () => {
-      entriesQuery.refetch();
-      countsQuery.refetch();
-    },
-  });
-  const updateMutation = trpc.journal.update.useMutation({
-    onSuccess: () => {
-      entriesQuery.refetch();
-      countsQuery.refetch();
-    },
-  });
-  const deleteMutation = trpc.journal.delete.useMutation({
-    onSuccess: () => {
-      entriesQuery.refetch();
-      countsQuery.refetch();
-    },
-  });
+  useEffect(() => {
+    loadEntries();
+  }, [loadEntries]);
 
-  const entries = entriesQuery.data || [];
-  const entryCounts = countsQuery.data || { all: 0, positive: 0, negative: 0, gratitude: 0, reflection: 0 };
-
-  const canEditEntry = (timestamp: string) => {
-    const entryTime = new Date(timestamp).getTime();
-    const now = new Date().getTime();
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-    return (now - entryTime) < twentyFourHours;
-  };
+  useEffect(() => {
+    setEntryCounts(getEntryCounts());
+  }, [entries, getEntryCounts]);
 
   const handleSaveEntry = useCallback(async () => {
     if (!title.trim() || !content.trim()) return;
     
-    try {
-      if (isEditing && selectedEntry) {
-        await updateMutation.mutateAsync({
-          id: selectedEntry.id,
-          title: title.trim(),
-          content: content.trim(),
-          mood,
-          tags: [],
-        });
-      } else {
-        await createMutation.mutateAsync({
-          type: selectedType,
-          title: title.trim(),
-          content: content.trim(),
-          mood,
-          tags: [],
-        });
-      }
-      
-      setShowModal(false);
-      setIsEditing(false);
-      setSelectedEntry(null);
-      setTitle('');
-      setContent('');
-      setMood(3);
-    } catch (error) {
-      console.error('Error saving entry:', error);
-      Alert.alert('Error', 'Failed to save entry. Please try again.');
+    if (isEditing && selectedEntry) {
+      await updateEntry(selectedEntry.id, {
+        type: selectedType,
+        title: title.trim(),
+        content: content.trim(),
+        mood,
+        tags: [],
+      });
+    } else {
+      await addEntry({
+        type: selectedType,
+        title: title.trim(),
+        content: content.trim(),
+        mood,
+        tags: [],
+      });
     }
-  }, [createMutation, updateMutation, selectedEntry, isEditing, selectedType, title, content, mood]);
+    
+    setShowModal(false);
+    setIsEditing(false);
+    setSelectedEntry(null);
+    setTitle('');
+    setContent('');
+    setMood(3);
+  }, [addEntry, updateEntry, selectedEntry, isEditing, selectedType, title, content, mood]);
 
-  const filteredEntries = entries;
+  const filteredEntries = entries.filter(entry => {
+    if (activeFilter === 'All') return true;
+    return entry.type === activeFilter.toLowerCase();
+  });
 
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -149,14 +120,9 @@ export default function JournalScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            try {
-              await deleteMutation.mutateAsync({ id: selectedEntry.id });
-              setShowDetailModal(false);
-              setSelectedEntry(null);
-            } catch (error) {
-              console.error('Error deleting entry:', error);
-              Alert.alert('Error', 'Failed to delete entry. Please try again.');
-            }
+            await deleteEntry(selectedEntry.id);
+            setShowDetailModal(false);
+            setSelectedEntry(null);
           },
         },
       ]
@@ -210,10 +176,7 @@ export default function JournalScreen() {
                   styles.filterTab,
                   activeFilter === filter && styles.activeFilterTab,
                 ]}
-                onPress={() => {
-                  setActiveFilter(filter);
-                  entriesQuery.refetch();
-                }}
+                onPress={() => setActiveFilter(filter)}
               >
                 <View style={styles.filterContent}>
                   <View style={[

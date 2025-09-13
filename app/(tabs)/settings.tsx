@@ -9,7 +9,6 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import {
   Bell,
   Shield,
@@ -19,13 +18,9 @@ import {
   HelpCircle,
   ChevronRight,
   User,
-  LogOut,
-  Database,
 } from 'lucide-react-native';
 import { useUserStore } from '@/stores/userStore';
-import { useAuth } from '@/contexts/AuthContext';
 import Card from '@/components/Card';
-import { trpc } from '@/lib/trpc';
 
 interface SettingItem {
   id: string;
@@ -40,8 +35,6 @@ interface SettingItem {
 
 export default function SettingsScreen() {
   const { profile, updateProfile } = useUserStore();
-  const { signOut, user } = useAuth();
-  const router = useRouter();
 
   const handleNotificationToggle = useCallback((value: boolean) => {
     updateProfile({ notificationsEnabled: value });
@@ -87,50 +80,6 @@ export default function SettingsScreen() {
     );
   }, []);
 
-  const dbTestQuery = trpc.health.dbTest.useQuery();
-
-  const handleDatabaseTest = useCallback(async () => {
-    try {
-      console.log('Testing database connection...');
-      await dbTestQuery.refetch();
-      
-      if (dbTestQuery.data?.status === 'ok') {
-        Alert.alert('Database Test', 'Database connection successful! ✅');
-      } else if (dbTestQuery.data?.status === 'warning') {
-        Alert.alert('Database Warning', dbTestQuery.data.message + '\n\nPlease run the SQL schema in your Supabase dashboard.');
-      } else if (dbTestQuery.error) {
-        Alert.alert('Database Error', dbTestQuery.error.message || 'Unknown error occurred');
-      } else {
-        Alert.alert('Database Error', 'Unknown error occurred');
-      }
-    } catch (error) {
-      console.error('Database test failed:', error);
-      Alert.alert('Database Test Failed', error instanceof Error ? error.message : 'Unknown error occurred');
-    }
-  }, [dbTestQuery]);
-
-  const handleSignOut = useCallback(() => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await signOut();
-            if (error) {
-              Alert.alert('Error', 'Failed to sign out');
-            } else {
-              router.replace('/auth/login');
-            }
-          },
-        },
-      ]
-    );
-  }, [signOut, router]);
-
   const settingSections = [
     {
       title: 'Account',
@@ -138,7 +87,7 @@ export default function SettingsScreen() {
         {
           id: 'profile',
           title: 'Profile',
-          subtitle: profile?.name || user?.user_metadata?.name || 'User',
+          subtitle: profile?.name || 'User',
           icon: <User color="#FFD700" size={20} />,
           type: 'navigation' as const,
         },
@@ -221,33 +170,12 @@ export default function SettingsScreen() {
       title: 'Support',
       items: [
         {
-          id: 'dbtest',
-          title: 'Test Database',
-          subtitle: 'Check database connection',
-          icon: <Database color="#60a5fa" size={20} />,
-          type: 'action' as const,
-          onPress: handleDatabaseTest,
-        },
-        {
           id: 'crisis',
           title: 'Crisis Resources',
           subtitle: 'Emergency mental health support',
           icon: <HelpCircle color="#f87171" size={20} />,
           type: 'action' as const,
           onPress: handleCrisisResources,
-        },
-      ],
-    },
-    {
-      title: 'Session',
-      items: [
-        {
-          id: 'signout',
-          title: 'Sign Out',
-          subtitle: user?.email || 'Sign out of your account',
-          icon: <LogOut color="#ff4444" size={20} />,
-          type: 'action' as const,
-          onPress: handleSignOut,
         },
       ],
     },
@@ -303,12 +231,12 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {settingSections.map((section, sectionIndex) => (
-          <View key={`section-${sectionIndex}-${section.title}`} style={styles.section}>
+        {settingSections.map((section) => (
+          <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <Card style={styles.sectionCard}>
               {section.items.map((item, index) => (
-                <View key={`section-${sectionIndex}-item-${index}-${item.id}`}>
+                <View key={item.id}>
                   {renderSettingItem(item)}
                   {index < section.items.length - 1 && <View style={styles.separator} />}
                 </View>
