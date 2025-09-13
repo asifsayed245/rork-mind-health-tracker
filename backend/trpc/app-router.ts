@@ -1,7 +1,17 @@
 import { createTRPCRouter, publicProcedure } from "./create-context";
+
+// Import all your route procedures
 import hiRoute from "./routes/example/hi/route";
-import { getUserProfileProcedure, updateUserProfileProcedure, initializeUserDataProcedure } from "./routes/user/profile/route";
-import { getCheckInsProcedure, createCheckInProcedure, getTodayCheckInsProcedure } from "./routes/checkins/route";
+import { 
+  getUserProfileProcedure, 
+  updateUserProfileProcedure, 
+  initializeUserDataProcedure 
+} from "./routes/user/profile/route";
+import { 
+  getCheckInsProcedure, 
+  createCheckInProcedure, 
+  getTodayCheckInsProcedure 
+} from "./routes/checkins/route";
 import { 
   getJournalEntriesProcedure, 
   createJournalEntryProcedure, 
@@ -11,9 +21,12 @@ import {
 } from "./routes/journal/route";
 
 export const appRouter = createTRPCRouter({
+  // Example routes
   example: createTRPCRouter({
     hi: hiRoute,
   }),
+  
+  // Health check routes
   health: createTRPCRouter({
     dbTest: publicProcedure.query(async ({ ctx }) => {
       try {
@@ -57,16 +70,22 @@ export const appRouter = createTRPCRouter({
       }
     }),
   }),
+  
+  // User routes
   user: createTRPCRouter({
     getProfile: getUserProfileProcedure,
     updateProfile: updateUserProfileProcedure,
     initialize: initializeUserDataProcedure,
   }),
+  
+  // Check-ins routes
   checkIns: createTRPCRouter({
     getAll: getCheckInsProcedure,
     create: createCheckInProcedure,
     getToday: getTodayCheckInsProcedure,
   }),
+  
+  // Journal routes
   journal: createTRPCRouter({
     getEntries: getJournalEntriesProcedure,
     create: createJournalEntryProcedure,
