@@ -2,6 +2,9 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
+import { useUserStore } from './userStore';
+import { useCheckInStore } from './checkInStore';
+import { useJournalStore } from './journalStore';
 
 interface AuthState {
   user: User | null;
@@ -82,6 +85,17 @@ export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      
+      // Clear all local data
+      const userStore = useUserStore.getState();
+      const checkInStore = useCheckInStore.getState();
+      const journalStore = useJournalStore.getState();
+      
+      await Promise.all([
+        userStore.clearProfile(),
+        checkInStore.clearAllData(),
+        journalStore.clearAllEntries(),
+      ]);
     } catch (error) {
       console.error('Error signing out:', error);
     } finally {

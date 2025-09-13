@@ -248,6 +248,15 @@ export const useJournalStore = create(
           reflection: entries.filter(e => e.type === 'reflection').length,
         };
       },
+      
+      clearAllEntries: async () => {
+        set({ entries: [], isLoading: false });
+        try {
+          await AsyncStorage.removeItem('journalEntries');
+        } catch (error) {
+          console.error('Failed to clear journal entries:', error);
+        }
+      },
     })
   )
 );

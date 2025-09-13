@@ -83,6 +83,15 @@ export const useUserStore = create(
           }
         }
       },
+      
+      clearProfile: async () => {
+        set({ profile: null, isLoading: false });
+        try {
+          await AsyncStorage.removeItem('userProfile');
+        } catch (error) {
+          console.error('Failed to clear profile:', error);
+        }
+      },
     })
   )
 );

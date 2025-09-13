@@ -437,6 +437,25 @@ export const useCheckInStore = create(
           console.error('Failed to load activity sessions:', error);
         }
       },
+      
+      clearAllData: async () => {
+        set({ 
+          checkIns: [], 
+          todayCheckIns: [], 
+          activitySessions: [], 
+          userSettings: null, 
+          isLoading: false 
+        });
+        try {
+          await AsyncStorage.multiRemove([
+            'checkIns', 
+            'activitySessions', 
+            'userSettings'
+          ]);
+        } catch (error) {
+          console.error('Failed to clear check-in data:', error);
+        }
+      },
     })
   )
 );

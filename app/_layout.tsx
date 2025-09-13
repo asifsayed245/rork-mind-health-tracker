@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
@@ -45,6 +45,14 @@ function RootLayoutNav() {
 
 function AuthenticatedApp() {
   const { isAuthenticated, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!isAuthenticated) {
+        router.replace('/login');
+      }
+    }
+  }, [isAuthenticated, loading]);
 
   if (loading) {
     return (
