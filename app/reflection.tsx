@@ -74,11 +74,7 @@ export default function ReflectionScreen() {
       },
     });
 
-    Alert.alert(
-      'Reflection saved 🧠',
-      'Be kind to yourself.',
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    router.back();
   };
 
   const renderStep = () => {

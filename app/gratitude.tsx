@@ -49,11 +49,7 @@ export default function GratitudeScreen() {
       tags: selectedTags,
     });
 
-    Alert.alert(
-      'Gratitude logged ✨', 
-      'Thanks for pausing to appreciate.',
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    router.back();
   };
 
   return (
