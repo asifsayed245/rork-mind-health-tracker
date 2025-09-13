@@ -43,7 +43,8 @@ app.use("*", cors({
     "http://localhost:19000",
     /^https:\/\/.*\.rork\.com$/,
     /^https:\/\/.*\.ngrok\.io$/,
-    /^https:\/\/.*\.ngrok-free\.app$/
+    /^https:\/\/.*\.ngrok-free\.app$/,
+    /^https:\/\/.*\.exp\.direct$/
   ],
   credentials: true,
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -51,34 +52,17 @@ app.use("*", cors({
   exposeHeaders: ["Content-Length", "X-Kuma-Revision"]
 }));
 
-// Mount tRPC router at /trpc - Multiple approaches for compatibility
 console.log('🔧 Setting up tRPC routes...');
 
-// Primary tRPC setup
+// Mount tRPC router at /trpc - FIXED configuration
 app.use(
   "/trpc/*",
   trpcServer({
     router: appRouter,
-    createContext,
+    createContext: createContext,
+    endpoint: "/trpc"
   })
 );
-
-// Backup tRPC handler for any missed routes
-app.all("/trpc/*", async (c) => {
-  console.log('🔄 Fallback tRPC handler:', c.req.method, c.req.url);
-  try {
-    return await trpcServer({
-      router: appRouter,
-      createContext,
-    })(c.req.raw);
-  } catch (error) {
-    console.error('❌ tRPC handler error:', error);
-    return c.json({ 
-      error: 'tRPC handler failed', 
-      details: error instanceof Error ? error.message : String(error) 
-    }, 500);
-  }
-});
 
 // Simple health check endpoint at /api/
 app.get("/", (c) => {
@@ -118,7 +102,20 @@ app.get("/trpc-test", (c) => {
     message: "✅ tRPC endpoint is reachable",
     note: "Actual tRPC calls should be POST to /api/trpc with proper tRPC format",
     trpcEndpoint: "/api/trpc",
-    availableRoutes: "Check your app-router.ts for available procedures"
+    availableRoutes: {
+      "user.getProfile": "GET user profile",
+      "user.updateProfile": "UPDATE user profile", 
+      "user.initialize": "INITIALIZE user data",
+      "checkIns.getAll": "GET all check-ins",
+      "checkIns.create": "CREATE check-in",
+      "checkIns.getToday": "GET today's check-ins",
+      "journal.getEntries": "GET journal entries",
+      "journal.create": "CREATE journal entry",
+      "journal.update": "UPDATE journal entry",
+      "journal.delete": "DELETE journal entry",
+      "journal.getCounts": "GET journal counts",
+      "health.dbTest": "TEST database connection"
+    }
   });
 });
 
