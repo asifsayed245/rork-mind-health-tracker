@@ -16,17 +16,29 @@ const getBaseUrl = () => {
   );
 };
 
-export const trpcClient = trpc.createClient({
-  links: [
-    httpLink({
-      url: `${getBaseUrl()}/api/trpc`,
-      transformer: superjson,
-      headers: async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        return {
-          authorization: session?.access_token ? `Bearer ${session.access_token}` : '',
-        };
-      },
-    }),
-  ],
-});
+// Create a function to get the tRPC client with current session
+const createTRPCClient = () => {
+  return trpc.createClient({
+    links: [
+      httpLink({
+        url: `${getBaseUrl()}/api/trpc`,
+        transformer: superjson,
+        headers: async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            return {
+              authorization: session?.access_token ? `Bearer ${session.access_token}` : '',
+            };
+          } catch (error) {
+            console.error('Error getting session for tRPC headers:', error);
+            return {
+              authorization: '',
+            };
+          }
+        },
+      }),
+    ],
+  });
+};
+
+export const trpcClient = createTRPCClient();

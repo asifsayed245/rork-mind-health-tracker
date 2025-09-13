@@ -1,12 +1,18 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
-import { trpc, trpcClient } from "@/lib/trpc";
+import { trpc } from "@/lib/trpc";
+import { httpLink } from "@trpc/client";
+import superjson from "superjson";
+import { supabase } from "@/lib/supabase";
 import { AuthProvider, useAuth } from "@/stores/authStore";
+import { CheckInProvider } from "@/stores/checkInStore";
+import { JournalProvider } from "@/stores/journalStore";
+
 
 SplashScreen.preventAutoHideAsync();
 
@@ -44,7 +50,40 @@ function RootLayoutNav() {
 }
 
 function AuthenticatedApp() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, session } = useAuth();
+
+  // Create tRPC client that updates when session changes
+  const trpcClient = useMemo(() => {
+    const getBaseUrl = () => {
+      if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+        return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      }
+      throw new Error("No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL");
+    };
+
+    return trpc.createClient({
+      links: [
+        httpLink({
+          url: `${getBaseUrl()}/api/trpc`,
+          transformer: superjson,
+          headers: async () => {
+            try {
+              // Use the session from auth context if available, otherwise get fresh session
+              const currentSession = session || (await supabase.auth.getSession()).data.session;
+              return {
+                authorization: currentSession?.access_token ? `Bearer ${currentSession.access_token}` : '',
+              };
+            } catch (error) {
+              console.error('Error getting session for tRPC headers:', error);
+              return {
+                authorization: '',
+              };
+            }
+          },
+        }),
+      ],
+    });
+  }, [session]);
 
   useEffect(() => {
     if (!loading) {
@@ -63,7 +102,15 @@ function AuthenticatedApp() {
     );
   }
 
-  return <RootLayoutNav />;
+  return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <CheckInProvider>
+        <JournalProvider>
+          <RootLayoutNav />
+        </JournalProvider>
+      </CheckInProvider>
+    </trpc.Provider>
+  );
 }
 
 export default function RootLayout() {
@@ -75,14 +122,12 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <AuthProvider>
-          <GestureWrapper style={styles.container}>
-            <StatusBar style="light" backgroundColor="#1a1a1a" />
-            <AuthenticatedApp />
-          </GestureWrapper>
-        </AuthProvider>
-      </trpc.Provider>
+      <AuthProvider>
+        <GestureWrapper style={styles.container}>
+          <StatusBar style="light" />
+          <AuthenticatedApp />
+        </GestureWrapper>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

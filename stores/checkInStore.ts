@@ -1,12 +1,12 @@
-import { create } from 'zustand';
-import { combine } from 'zustand/middleware';
+import createContextHook from '@nkzw/create-context-hook';
+import { useState, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { trpcClient } from '@/lib/trpc';
+import { trpc } from '@/lib/trpc';
 
 // Database types
 interface DbCheckIn {
   id: string;
-  user_id: string;
+  user_id: string | null;
   slot: 'morning' | 'afternoon' | 'evening' | 'night';
   mood: number;
   stress: number;
@@ -63,412 +63,454 @@ export interface ActivitySession {
   postStress?: number;
 }
 
+export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [todayCheckIns, setTodayCheckIns] = useState<CheckIn[]>([]);
+  const [activitySessions, setActivitySessions] = useState<ActivitySession[]>([]);
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Use tRPC hooks
+  const checkInsQuery = trpc.checkins.get.useQuery();
+  const addCheckInMutation = trpc.checkins.add.useMutation();
 
-export const useCheckInStore = create(
-  combine(
-    {
-      checkIns: [] as CheckIn[],
-      todayCheckIns: [] as CheckIn[],
-      activitySessions: [] as ActivitySession[],
-      userSettings: null as UserSettings | null,
-      isLoading: true,
-    },
-    (set, get) => ({
-      addCheckIn: async (checkInData: Omit<CheckIn, 'id' | 'timestampISO'>) => {
-        try {
-          // Save to database via tRPC
-          const savedCheckIn = await trpcClient.checkins.add.mutate({
-            slot: checkInData.slot,
-            mood: checkInData.mood,
-            stress: checkInData.stress,
-            energy: checkInData.energy,
-            note: checkInData.note,
-          });
+  const convertDbCheckInToLocal = useCallback((dbCheckIn: DbCheckIn): CheckIn => ({
+    id: dbCheckIn.id,
+    userId: dbCheckIn.user_id || undefined,
+    slot: dbCheckIn.slot,
+    mood: dbCheckIn.mood,
+    stress: dbCheckIn.stress,
+    energy: dbCheckIn.energy,
+    note: dbCheckIn.note || undefined,
+    timestampISO: dbCheckIn.created_at,
+  }), []);
 
-          // Convert database format to local format
-          const dbCheckIn = savedCheckIn as DbCheckIn;
-          const newCheckIn: CheckIn = {
-            id: dbCheckIn.id,
-            userId: dbCheckIn.user_id || undefined,
-            slot: dbCheckIn.slot,
-            mood: dbCheckIn.mood,
-            stress: dbCheckIn.stress,
-            energy: dbCheckIn.energy,
-            note: dbCheckIn.note || undefined,
-            timestampISO: dbCheckIn.created_at,
-          };
-          
-          const checkIns = [...get().checkIns, newCheckIn];
-          const today = new Date().toISOString().split('T')[0];
-          const todayCheckIns = checkIns.filter(c => c.timestampISO.split('T')[0] === today);
-          
-          set({ checkIns, todayCheckIns });
-          
-          // Also save to AsyncStorage as backup
-          await AsyncStorage.setItem('checkIns', JSON.stringify(checkIns));
-        } catch (error) {
-          console.error('Failed to save check-in:', error);
-          throw error;
-        }
-      },
+  const updateCheckInsFromData = useCallback((data: DbCheckIn[]) => {
+    const convertedCheckIns: CheckIn[] = data.map(convertDbCheckInToLocal);
+    const today = new Date().toISOString().split('T')[0];
+    const todayFiltered = convertedCheckIns.filter((checkIn: CheckIn) => 
+      checkIn.timestampISO?.split('T')[0] === today
+    );
+    
+    setCheckIns(convertedCheckIns);
+    setTodayCheckIns(todayFiltered);
+    setIsLoading(false);
+    
+    // Save to AsyncStorage as backup
+    AsyncStorage.setItem('checkIns', JSON.stringify(convertedCheckIns)).catch(console.error);
+  }, [convertDbCheckInToLocal]);
+
+  const loadFromAsyncStorage = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('checkIns');
+      const storedCheckIns = stored ? JSON.parse(stored) : [];
+      const today = new Date().toISOString().split('T')[0];
+      const todayFiltered = storedCheckIns.filter((checkIn: CheckIn) => 
+        checkIn.timestampISO?.split('T')[0] === today
+      );
+      setCheckIns(storedCheckIns);
+      setTodayCheckIns(todayFiltered);
+    } catch (asyncError) {
+      console.error('Failed to load check-ins from AsyncStorage:', asyncError);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const addCheckIn = useCallback(async (checkInData: Omit<CheckIn, 'id' | 'timestampISO'>) => {
+    try {
+      const result = await addCheckInMutation.mutateAsync({
+        slot: checkInData.slot,
+        mood: checkInData.mood,
+        stress: checkInData.stress,
+        energy: checkInData.energy,
+        note: checkInData.note,
+      });
+
+      // Convert database format to local format
+      const dbCheckIn = result as DbCheckIn;
+      const newCheckIn = convertDbCheckInToLocal(dbCheckIn);
       
-      loadCheckIns: async () => {
-        try {
-          // Try to load from database first
-          const dbCheckIns = await trpcClient.checkins.get.query();
-          
-          // Convert database format to local format
-          const checkIns: CheckIn[] = (dbCheckIns as DbCheckIn[]).map(dbCheckIn => ({
-            id: dbCheckIn.id,
-            userId: dbCheckIn.user_id || undefined,
-            slot: dbCheckIn.slot,
-            mood: dbCheckIn.mood,
-            stress: dbCheckIn.stress,
-            energy: dbCheckIn.energy,
-            note: dbCheckIn.note || undefined,
-            timestampISO: dbCheckIn.created_at,
-          }));
-          
-          const today = new Date().toISOString().split('T')[0];
-          const todayCheckIns = checkIns.filter((checkIn: CheckIn) => 
-            checkIn.timestampISO?.split('T')[0] === today
-          );
-          
-          set({ checkIns, todayCheckIns, isLoading: false });
-          
-          // Save to AsyncStorage as backup
-          await AsyncStorage.setItem('checkIns', JSON.stringify(checkIns));
-        } catch (error) {
-          console.error('Failed to load check-ins from database, trying AsyncStorage:', error);
-          
-          // Fallback to AsyncStorage
-          try {
-            const stored = await AsyncStorage.getItem('checkIns');
-            const checkIns = stored ? JSON.parse(stored) : [];
-            const today = new Date().toISOString().split('T')[0];
-            const todayCheckIns = checkIns.filter((checkIn: CheckIn) => 
-              checkIn.timestampISO?.split('T')[0] === today
-            );
-            set({ checkIns, todayCheckIns, isLoading: false });
-          } catch (asyncError) {
-            console.error('Failed to load check-ins from AsyncStorage:', asyncError);
-            set({ isLoading: false });
-          }
-        }
-      },
+      const updatedCheckIns = [...checkIns, newCheckIn];
+      const today = new Date().toISOString().split('T')[0];
+      const updatedTodayCheckIns = updatedCheckIns.filter(c => c.timestampISO.split('T')[0] === today);
       
-      getTodayCheckIns: () => {
-        return get().todayCheckIns;
-      },
+      setCheckIns(updatedCheckIns);
+      setTodayCheckIns(updatedTodayCheckIns);
       
-      getCheckInBySlot: (slot: CheckIn['slot']) => {
-        return get().todayCheckIns.find(checkIn => checkIn.slot === slot) || null;
-      },
+      // Save to AsyncStorage as backup
+      AsyncStorage.setItem('checkIns', JSON.stringify(updatedCheckIns)).catch(console.error);
+    } catch (error) {
+      console.error('Failed to save check-in:', error);
+      throw error;
+    }
+  }, [addCheckInMutation, checkIns, convertDbCheckInToLocal]);
+
+  const loadCheckIns = useCallback(async () => {
+    if (checkInsQuery.data) {
+      updateCheckInsFromData(checkInsQuery.data as DbCheckIn[]);
+    } else if (checkInsQuery.error) {
+      console.error('Failed to load check-ins from database, trying AsyncStorage:', checkInsQuery.error);
+      await loadFromAsyncStorage();
+    } else if (!checkInsQuery.isLoading) {
+      // Trigger refetch if not loading and no data
+      checkInsQuery.refetch();
+    }
+  }, [checkInsQuery, updateCheckInsFromData, loadFromAsyncStorage]);
       
-      getCheckInsByDateRange: (startISO: string, endISO: string) => {
-        return get().checkIns.filter(checkIn => {
-          const checkInDate = checkIn.timestampISO.split('T')[0];
-          return checkInDate >= startISO && checkInDate <= endISO;
-        });
-      },
+  const getTodayCheckIns = useCallback(() => {
+    return todayCheckIns;
+  }, [todayCheckIns]);
+  
+  const getCheckInBySlot = useCallback((slot: CheckIn['slot']) => {
+    return todayCheckIns.find(checkIn => checkIn.slot === slot) || null;
+  }, [todayCheckIns]);
+  
+  const getCheckInsByDateRange = useCallback((startISO: string, endISO: string) => {
+    return checkIns.filter(checkIn => {
+      const checkInDate = checkIn.timestampISO.split('T')[0];
+      return checkInDate >= startISO && checkInDate <= endISO;
+    });
+  }, [checkIns]);
+  
+  const getDailyAggregates = useCallback((days: string[]): DailyAggregate[] => {
+    return days.map(date => {
+      const dayCheckIns = checkIns.filter(c => 
+        c.timestampISO.split('T')[0] === date
+      );
       
-      getDailyAggregates: (days: string[]): DailyAggregate[] => {
-        return days.map(date => {
-          const dayCheckIns = get().checkIns.filter(c => 
-            c.timestampISO.split('T')[0] === date
-          );
-          
-          if (dayCheckIns.length === 0) {
-            return {
-              date,
-              slotsCount: 0,
-              moodAvg: 0,
-              stressAvg: 0,
-              energyAvg: 0,
-            };
-          }
-          
-          return {
-            date,
-            slotsCount: dayCheckIns.length,
-            moodAvg: dayCheckIns.reduce((sum, c) => sum + c.mood, 0) / dayCheckIns.length,
-            stressAvg: dayCheckIns.reduce((sum, c) => sum + c.stress, 0) / dayCheckIns.length,
-            energyAvg: dayCheckIns.reduce((sum, c) => sum + c.energy, 0) / dayCheckIns.length,
-          };
-        });
-      },
-      
-      isToughDay: (agg: DailyAggregate, thresholds: UserSettings['thresholds']) => {
-        return (
-          agg.moodAvg <= thresholds.moodLowCutoff &&
-          agg.stressAvg >= thresholds.stressHighCutoff &&
-          agg.energyAvg <= thresholds.energyLowCutoff &&
-          agg.slotsCount >= thresholds.minSlotsPerDay
-        );
-      },
-      
-      hasConsecutiveToughStreak: (aggs: DailyAggregate[], requiredDays: number) => {
-        const settings = get().userSettings;
-        if (!settings) return false;
-        
-        let consecutiveCount = 0;
-        for (let i = aggs.length - 1; i >= 0; i--) {
-          const isTough = (
-            aggs[i].moodAvg <= settings.thresholds.moodLowCutoff &&
-            aggs[i].stressAvg >= settings.thresholds.stressHighCutoff &&
-            aggs[i].energyAvg <= settings.thresholds.energyLowCutoff &&
-            aggs[i].slotsCount >= settings.thresholds.minSlotsPerDay
-          );
-          
-          if (isTough) {
-            consecutiveCount++;
-            if (consecutiveCount >= requiredDays) {
-              return true;
-            }
-          } else {
-            consecutiveCount = 0;
-          }
-        }
-        return false;
-      },
-      
-      shouldShowHeavyCard: () => {
-        const settings = get().userSettings;
-        if (!settings) return false;
-        
-        const now = new Date();
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        
-        const last7Days = [];
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          last7Days.push(date.toISOString().split('T')[0]);
-        }
-        
-        const aggs = last7Days.map(date => {
-          const dayCheckIns = get().checkIns.filter(c => 
-            c.timestampISO.split('T')[0] === date
-          );
-          
-          if (dayCheckIns.length === 0) {
-            return {
-              date,
-              slotsCount: 0,
-              moodAvg: 0,
-              stressAvg: 0,
-              energyAvg: 0,
-            };
-          }
-          
-          return {
-            date,
-            slotsCount: dayCheckIns.length,
-            moodAvg: dayCheckIns.reduce((sum, c) => sum + c.mood, 0) / dayCheckIns.length,
-            stressAvg: dayCheckIns.reduce((sum, c) => sum + c.stress, 0) / dayCheckIns.length,
-            energyAvg: dayCheckIns.reduce((sum, c) => sum + c.energy, 0) / dayCheckIns.length,
-          };
-        });
-        
-        let consecutiveCount = 0;
-        for (let i = aggs.length - 1; i >= 0; i--) {
-          const isTough = (
-            aggs[i].moodAvg <= settings.thresholds.moodLowCutoff &&
-            aggs[i].stressAvg >= settings.thresholds.stressHighCutoff &&
-            aggs[i].energyAvg <= settings.thresholds.energyLowCutoff &&
-            aggs[i].slotsCount >= settings.thresholds.minSlotsPerDay
-          );
-          
-          if (isTough) {
-            consecutiveCount++;
-            if (consecutiveCount >= settings.thresholds.streakDaysRequired) {
-              break;
-            }
-          } else {
-            consecutiveCount = 0;
-          }
-        }
-        
-        if (consecutiveCount < settings.thresholds.streakDaysRequired) return false;
-        
-        const lastShown = settings.lastHeavyCardShownAt ? new Date(settings.lastHeavyCardShownAt) : null;
-        const lastDismissed = settings.lastHeavyCardDismissedAt ? new Date(settings.lastHeavyCardDismissedAt) : null;
-        
-        const sevenDaysAgoTime = sevenDaysAgo.getTime();
-        
-        if (lastShown && lastShown.getTime() > sevenDaysAgoTime) return false;
-        if (lastDismissed && lastDismissed.getTime() > sevenDaysAgoTime) return false;
-        
-        return true;
-      },
-      
-      markHeavyCardShown: async () => {
-        const settings = get().userSettings;
-        if (settings) {
-          const updatedSettings = {
-            ...settings,
-            lastHeavyCardShownAt: new Date().toISOString(),
-          };
-          set({ userSettings: updatedSettings });
-          try {
-            await AsyncStorage.setItem('userSettings', JSON.stringify(updatedSettings));
-          } catch (error) {
-            console.error('Failed to save user settings:', error);
-          }
-        }
-      },
-      
-      markHeavyCardDismissed: async () => {
-        const settings = get().userSettings;
-        if (settings) {
-          const updatedSettings = {
-            ...settings,
-            lastHeavyCardDismissedAt: new Date().toISOString(),
-          };
-          set({ userSettings: updatedSettings });
-          try {
-            await AsyncStorage.setItem('userSettings', JSON.stringify(updatedSettings));
-          } catch (error) {
-            console.error('Failed to save user settings:', error);
-          }
-        }
-      },
-      
-      getWeeklyAverage: () => {
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        
-        const recentCheckIns = get().checkIns.filter(
-          checkIn => new Date(checkIn.timestampISO) >= weekAgo
-        );
-        
-        if (recentCheckIns.length === 0) return 0;
-        
-        const average = recentCheckIns.reduce(
-          (sum, checkIn) => sum + (checkIn.mood + checkIn.energy - checkIn.stress) / 3,
-          0
-        ) / recentCheckIns.length;
-        
-        return Math.round(average * 20);
-      },
-      
-      getDailyScore: () => {
-        const todayCheckIns = get().todayCheckIns;
-        return Math.round((todayCheckIns.length / 4) * 100);
-      },
-      
-      getStreak: () => {
-        const now = new Date();
-        let streak = 0;
-        
-        for (let i = 0; i < 365; i++) {
-          const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          const dateStr = date.toISOString().split('T')[0];
-          const dayCheckIns = get().checkIns.filter(c => 
-            c.timestampISO.split('T')[0] === dateStr
-          );
-          
-          if (dayCheckIns.length === 4) {
-            streak++;
-          } else if (i === 0) {
-            break;
-          } else {
-            break;
-          }
-        }
-        
-        return streak;
-      },
-      
-      addActivitySession: async (sessionData: Omit<ActivitySession, 'id' | 'timestamp' | 'date'>) => {
-        const now = new Date();
-        const newSession: ActivitySession = {
-          ...sessionData,
-          id: Date.now().toString(),
-          timestamp: now.toISOString(),
-          date: now.toISOString().split('T')[0],
+      if (dayCheckIns.length === 0) {
+        return {
+          date,
+          slotsCount: 0,
+          moodAvg: 0,
+          stressAvg: 0,
+          energyAvg: 0,
         };
-        
-        const sessions = [...get().activitySessions, newSession];
-        set({ activitySessions: sessions });
-        
-        try {
-          await AsyncStorage.setItem('activitySessions', JSON.stringify(sessions));
-        } catch (error) {
-          console.error('Failed to save activity session:', error);
-        }
-      },
+      }
       
-      loadUserSettings: async () => {
-        try {
-          const stored = await AsyncStorage.getItem('userSettings');
-          if (stored) {
-            const settings = JSON.parse(stored);
-            set({ userSettings: settings });
-          } else {
-            const defaultSettings: UserSettings = {
-              id: Date.now().toString(),
-              notifMorning: '07:30',
-              notifAfternoon: '12:30',
-              notifEvening: '18:30',
-              notifNight: '21:30',
-              thresholds: {
-                moodLowCutoff: 2.5,
-                stressHighCutoff: 3.5,
-                energyLowCutoff: 2.5,
-                minSlotsPerDay: 2,
-                streakDaysRequired: 3,
-              },
-            };
-            set({ userSettings: defaultSettings });
-            await AsyncStorage.setItem('userSettings', JSON.stringify(defaultSettings));
-          }
-        } catch (error) {
-          console.error('Failed to load user settings:', error);
-        }
-      },
+      return {
+        date,
+        slotsCount: dayCheckIns.length,
+        moodAvg: dayCheckIns.reduce((sum, c) => sum + c.mood, 0) / dayCheckIns.length,
+        stressAvg: dayCheckIns.reduce((sum, c) => sum + c.stress, 0) / dayCheckIns.length,
+        energyAvg: dayCheckIns.reduce((sum, c) => sum + c.energy, 0) / dayCheckIns.length,
+      };
+    });
+  }, [checkIns]);
       
-      updateUserSettings: async (updates: Partial<UserSettings>) => {
-        const current = get().userSettings;
-        if (current) {
-          const updated = { ...current, ...updates };
-          set({ userSettings: updated });
-          try {
-            await AsyncStorage.setItem('userSettings', JSON.stringify(updated));
-          } catch (error) {
-            console.error('Failed to save user settings:', error);
-          }
-        }
-      },
+  const isToughDay = useCallback((agg: DailyAggregate, thresholds: UserSettings['thresholds']) => {
+    return (
+      agg.moodAvg <= thresholds.moodLowCutoff &&
+      agg.stressAvg >= thresholds.stressHighCutoff &&
+      agg.energyAvg <= thresholds.energyLowCutoff &&
+      agg.slotsCount >= thresholds.minSlotsPerDay
+    );
+  }, []);
+  
+  const hasConsecutiveToughStreak = useCallback((aggs: DailyAggregate[], requiredDays: number) => {
+    if (!userSettings) return false;
+    
+    let consecutiveCount = 0;
+    for (let i = aggs.length - 1; i >= 0; i--) {
+      const isTough = (
+        aggs[i].moodAvg <= userSettings.thresholds.moodLowCutoff &&
+        aggs[i].stressAvg >= userSettings.thresholds.stressHighCutoff &&
+        aggs[i].energyAvg <= userSettings.thresholds.energyLowCutoff &&
+        aggs[i].slotsCount >= userSettings.thresholds.minSlotsPerDay
+      );
       
-      loadActivitySessions: async () => {
-        try {
-          const stored = await AsyncStorage.getItem('activitySessions');
-          const sessions = stored ? JSON.parse(stored) : [];
-          set({ activitySessions: sessions });
-        } catch (error) {
-          console.error('Failed to load activity sessions:', error);
+      if (isTough) {
+        consecutiveCount++;
+        if (consecutiveCount >= requiredDays) {
+          return true;
         }
-      },
+      } else {
+        consecutiveCount = 0;
+      }
+    }
+    return false;
+  }, [userSettings]);
       
-      clearAllData: async () => {
-        set({ 
-          checkIns: [], 
-          todayCheckIns: [], 
-          activitySessions: [], 
-          userSettings: null, 
-          isLoading: false 
-        });
-        try {
-          await AsyncStorage.multiRemove([
-            'checkIns', 
-            'activitySessions', 
-            'userSettings'
-          ]);
-        } catch (error) {
-          console.error('Failed to clear check-in data:', error);
+  const shouldShowHeavyCard = useCallback(() => {
+    if (!userSettings) return false;
+    
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      last7Days.push(date.toISOString().split('T')[0]);
+    }
+    
+    const aggs = last7Days.map(date => {
+      const dayCheckIns = checkIns.filter(c => 
+        c.timestampISO.split('T')[0] === date
+      );
+      
+      if (dayCheckIns.length === 0) {
+        return {
+          date,
+          slotsCount: 0,
+          moodAvg: 0,
+          stressAvg: 0,
+          energyAvg: 0,
+        };
+      }
+      
+      return {
+        date,
+        slotsCount: dayCheckIns.length,
+        moodAvg: dayCheckIns.reduce((sum, c) => sum + c.mood, 0) / dayCheckIns.length,
+        stressAvg: dayCheckIns.reduce((sum, c) => sum + c.stress, 0) / dayCheckIns.length,
+        energyAvg: dayCheckIns.reduce((sum, c) => sum + c.energy, 0) / dayCheckIns.length,
+      };
+    });
+    
+    let consecutiveCount = 0;
+    for (let i = aggs.length - 1; i >= 0; i--) {
+      const isTough = (
+        aggs[i].moodAvg <= userSettings.thresholds.moodLowCutoff &&
+        aggs[i].stressAvg >= userSettings.thresholds.stressHighCutoff &&
+        aggs[i].energyAvg <= userSettings.thresholds.energyLowCutoff &&
+        aggs[i].slotsCount >= userSettings.thresholds.minSlotsPerDay
+      );
+      
+      if (isTough) {
+        consecutiveCount++;
+        if (consecutiveCount >= userSettings.thresholds.streakDaysRequired) {
+          break;
         }
-      },
-    })
-  )
-);
+      } else {
+        consecutiveCount = 0;
+      }
+    }
+    
+    if (consecutiveCount < userSettings.thresholds.streakDaysRequired) return false;
+    
+    const lastShown = userSettings.lastHeavyCardShownAt ? new Date(userSettings.lastHeavyCardShownAt) : null;
+    const lastDismissed = userSettings.lastHeavyCardDismissedAt ? new Date(userSettings.lastHeavyCardDismissedAt) : null;
+    
+    const sevenDaysAgoTime = sevenDaysAgo.getTime();
+    
+    if (lastShown && lastShown.getTime() > sevenDaysAgoTime) return false;
+    if (lastDismissed && lastDismissed.getTime() > sevenDaysAgoTime) return false;
+    
+    return true;
+  }, [userSettings, checkIns]);
+      
+  const markHeavyCardShown = useCallback(async () => {
+    if (userSettings) {
+      const updatedSettings = {
+        ...userSettings,
+        lastHeavyCardShownAt: new Date().toISOString(),
+      };
+      setUserSettings(updatedSettings);
+      try {
+        await AsyncStorage.setItem('userSettings', JSON.stringify(updatedSettings));
+      } catch (storageError) {
+        console.error('Failed to save user settings:', storageError);
+      }
+    }
+  }, [userSettings]);
+  
+  const markHeavyCardDismissed = useCallback(async () => {
+    if (userSettings) {
+      const updatedSettings = {
+        ...userSettings,
+        lastHeavyCardDismissedAt: new Date().toISOString(),
+      };
+      setUserSettings(updatedSettings);
+      try {
+        await AsyncStorage.setItem('userSettings', JSON.stringify(updatedSettings));
+      } catch (storageError) {
+        console.error('Failed to save user settings:', storageError);
+      }
+    }
+  }, [userSettings]);
+      
+  const getWeeklyAverage = useCallback(() => {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const recentCheckIns = checkIns.filter(
+      checkIn => new Date(checkIn.timestampISO) >= weekAgo
+    );
+    
+    if (recentCheckIns.length === 0) return 0;
+    
+    const average = recentCheckIns.reduce(
+      (sum, checkIn) => sum + (checkIn.mood + checkIn.energy - checkIn.stress) / 3,
+      0
+    ) / recentCheckIns.length;
+    
+    return Math.round(average * 20);
+  }, [checkIns]);
+  
+  const getDailyScore = useCallback(() => {
+    return Math.round((todayCheckIns.length / 4) * 100);
+  }, [todayCheckIns]);
+  
+  const getStreak = useCallback(() => {
+    const now = new Date();
+    let streak = 0;
+    
+    for (let i = 0; i < 365; i++) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayCheckIns = checkIns.filter(c => 
+        c.timestampISO.split('T')[0] === dateStr
+      );
+      
+      if (dayCheckIns.length === 4) {
+        streak++;
+      } else if (i === 0) {
+        break;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  }, [checkIns]);
+      
+  const addActivitySession = useCallback(async (sessionData: Omit<ActivitySession, 'id' | 'timestamp' | 'date'>) => {
+    const now = new Date();
+    const newSession: ActivitySession = {
+      ...sessionData,
+      id: Date.now().toString(),
+      timestamp: now.toISOString(),
+      date: now.toISOString().split('T')[0],
+    };
+    
+    const sessions = [...activitySessions, newSession];
+    setActivitySessions(sessions);
+    
+    try {
+      await AsyncStorage.setItem('activitySessions', JSON.stringify(sessions));
+    } catch (storageError) {
+      console.error('Failed to save activity session:', storageError);
+    }
+  }, [activitySessions]);
+  
+  const loadUserSettings = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('userSettings');
+      if (stored) {
+        const settings = JSON.parse(stored);
+        setUserSettings(settings);
+      } else {
+        const defaultSettings: UserSettings = {
+          id: Date.now().toString(),
+          notifMorning: '07:30',
+          notifAfternoon: '12:30',
+          notifEvening: '18:30',
+          notifNight: '21:30',
+          thresholds: {
+            moodLowCutoff: 2.5,
+            stressHighCutoff: 3.5,
+            energyLowCutoff: 2.5,
+            minSlotsPerDay: 2,
+            streakDaysRequired: 3,
+          },
+        };
+        setUserSettings(defaultSettings);
+        await AsyncStorage.setItem('userSettings', JSON.stringify(defaultSettings));
+      }
+    } catch (storageError) {
+      console.error('Failed to load user settings:', storageError);
+    }
+  }, []);
+  
+  const updateUserSettings = useCallback(async (updates: Partial<UserSettings>) => {
+    if (userSettings) {
+      const updated = { ...userSettings, ...updates };
+      setUserSettings(updated);
+      try {
+        await AsyncStorage.setItem('userSettings', JSON.stringify(updated));
+      } catch (storageError) {
+        console.error('Failed to save user settings:', storageError);
+      }
+    }
+  }, [userSettings]);
+  
+  const loadActivitySessions = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('activitySessions');
+      const sessions = stored ? JSON.parse(stored) : [];
+      setActivitySessions(sessions);
+    } catch (storageError) {
+      console.error('Failed to load activity sessions:', storageError);
+    }
+  }, []);
+  
+  const clearAllData = useCallback(async () => {
+    setCheckIns([]);
+    setTodayCheckIns([]);
+    setActivitySessions([]);
+    setUserSettings(null);
+    setIsLoading(false);
+    try {
+      await AsyncStorage.multiRemove([
+        'checkIns', 
+        'activitySessions', 
+        'userSettings'
+      ]);
+    } catch (storageError) {
+      console.error('Failed to clear check-in data:', storageError);
+    }
+  }, []);
+
+  return useMemo(() => ({
+    checkIns,
+    todayCheckIns,
+    activitySessions,
+    userSettings,
+    isLoading,
+    addCheckIn,
+    loadCheckIns,
+    getTodayCheckIns,
+    getCheckInBySlot,
+    getCheckInsByDateRange,
+    getDailyAggregates,
+    isToughDay,
+    hasConsecutiveToughStreak,
+    shouldShowHeavyCard,
+    markHeavyCardShown,
+    markHeavyCardDismissed,
+    getWeeklyAverage,
+    getDailyScore,
+    getStreak,
+    addActivitySession,
+    loadUserSettings,
+    updateUserSettings,
+    loadActivitySessions,
+    clearAllData,
+  }), [
+    checkIns,
+    todayCheckIns,
+    activitySessions,
+    userSettings,
+    isLoading,
+    addCheckIn,
+    loadCheckIns,
+    getTodayCheckIns,
+    getCheckInBySlot,
+    getCheckInsByDateRange,
+    getDailyAggregates,
+    isToughDay,
+    hasConsecutiveToughStreak,
+    shouldShowHeavyCard,
+    markHeavyCardShown,
+    markHeavyCardDismissed,
+    getWeeklyAverage,
+    getDailyScore,
+    getStreak,
+    addActivitySession,
+    loadUserSettings,
+    updateUserSettings,
+    loadActivitySessions,
+    clearAllData,
+  ]);
+});
