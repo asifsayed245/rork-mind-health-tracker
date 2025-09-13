@@ -7,6 +7,13 @@ import { supabase } from "@/lib/supabase";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
+  // Force localhost for development when backend is running locally
+  if (__DEV__) {
+    const fallback = 'http://localhost:3001';
+    console.log('tRPC baseUrl (forced localhost):', fallback);
+    return fallback;
+  }
+  
   // Check if running on Rork platform (web)
   if (typeof window !== 'undefined' && window.location) {
     // For web, use the current origin
@@ -25,14 +32,6 @@ const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_TUNNEL_URL) {
     console.log('tRPC baseUrl (tunnel):', process.env.EXPO_PUBLIC_TUNNEL_URL);
     return process.env.EXPO_PUBLIC_TUNNEL_URL;
-  }
-
-  // Fallback URLs for development
-  if (__DEV__) {
-    // For Expo development - UPDATED PORT FROM 8081 TO 3001
-    const fallback = 'http://localhost:3001';
-    console.log('tRPC baseUrl (dev fallback):', fallback);
-    return fallback;
   }
 
   // For production, assume same origin
