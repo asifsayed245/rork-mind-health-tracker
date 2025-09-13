@@ -5,8 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Lock, Heart, Moon, Brain, Zap, Users } from 'lucide-react-native';
 import { useUserStore } from '@/stores/userStore';
 import Card from '@/components/Card';
@@ -30,10 +32,10 @@ const activityPacks: ActivityPack[] = [
     color: '#2d4a2d',
     isLocked: false,
     activities: [
-      '3 Things I\'m Grateful For',
-      'Gratitude Letter Writing',
-      'Appreciation Meditation',
-      'Thank You Practice',
+      'Gratitude Journal',
+      'Breathing Exercise',
+      'Reflection Practice',
+      'Mindful Moments',
     ],
   },
   {
@@ -99,11 +101,71 @@ export default function ActivitiesScreen() {
 
   const handlePackPress = useCallback((pack: ActivityPack) => {
     if (pack.isLocked && !profile?.isPremium) {
-      // Show paywall modal
+      Alert.alert(
+        '🌟 Premium Feature',
+        `Unlock ${pack.title} and all other premium activities with a subscription.`,
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Upgrade Now', onPress: () => console.log('Navigate to premium') },
+        ]
+      );
       return;
     }
-    // Navigate to pack details
+    
+    // Navigate to activity selection for this pack
+    if (pack.id === 'gratitude') {
+      // Show activity selection for gratitude pack
+      showActivitySelection(pack);
+    } else {
+      Alert.alert(
+        'Coming Soon',
+        `${pack.title} activities will be available in the next update!`
+      );
+    }
   }, [profile?.isPremium]);
+
+  const showActivitySelection = (pack: ActivityPack) => {
+    const activities = [
+      { name: 'Gratitude Journal', route: '/gratitude' },
+      { name: 'Breathing Exercise', route: '/breathing' },
+      { name: 'Reflection Practice', route: '/reflection' },
+      { name: 'Mindful Moments', action: () => Alert.alert('Coming Soon', 'Mindful Moments will be available soon!') },
+    ];
+
+    Alert.alert(
+      pack.title,
+      'Choose an activity to start your wellness journey:',
+      [
+        ...activities.map(activity => ({
+          text: activity.name,
+          onPress: () => {
+            if (activity.route) {
+              router.push(activity.route as any);
+            } else if (activity.action) {
+              activity.action();
+            }
+          }
+        })),
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const handleFreeActivityPress = useCallback((activityName: string) => {
+    switch (activityName) {
+      case 'Gratitude Journal':
+        router.push('/gratitude');
+        break;
+      case 'Breathing Exercise':
+        router.push('/breathing');
+        break;
+      case 'Reflection Practice':
+        router.push('/reflection');
+        break;
+      default:
+        Alert.alert('Coming Soon', 'This activity will be available soon!');
+    }
+  }, []);
 
   const insets = useSafeAreaInsets();
 
@@ -165,13 +227,39 @@ export default function ActivitiesScreen() {
           </Text>
           
           <View style={styles.freeActivities}>
-            {activityPacks[0].activities.map((activity, index) => (
-              <TouchableOpacity key={index} style={styles.freeActivity}>
+            {[
+              { name: 'Gratitude Journal', duration: '5 min', available: true },
+              { name: 'Breathing Exercise', duration: '3 min', available: true },
+              { name: 'Reflection Practice', duration: '10 min', available: true },
+              { name: 'Mindful Moments', duration: '7 min', available: false },
+            ].map((activity, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={[
+                  styles.freeActivity,
+                  !activity.available && styles.disabledActivity
+                ]}
+                onPress={() => activity.available && handleFreeActivityPress(activity.name)}
+                disabled={!activity.available}
+              >
                 <View style={styles.activityIcon}>
-                  <Heart color="#4ade80" size={16} />
+                  <Heart color={activity.available ? "#4ade80" : "#666"} size={16} />
                 </View>
-                <Text style={styles.activityName}>{activity}</Text>
-                <Text style={styles.activityDuration}>5 min</Text>
+                <Text style={[
+                  styles.activityName,
+                  !activity.available && styles.disabledActivityText
+                ]}>
+                  {activity.name}
+                </Text>
+                <Text style={[
+                  styles.activityDuration,
+                  !activity.available && styles.disabledActivityText
+                ]}>
+                  {activity.duration}
+                </Text>
+                {!activity.available && (
+                  <Text style={styles.comingSoonText}>Soon</Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -184,7 +272,10 @@ export default function ActivitiesScreen() {
             <Text style={styles.premiumCtaDescription}>
               Get access to all activity packs, advanced insights, and premium features.
             </Text>
-            <TouchableOpacity style={styles.premiumButton}>
+            <TouchableOpacity 
+              style={styles.premiumButton}
+              onPress={() => Alert.alert('Premium', 'Premium features coming soon!')}
+            >
               <Text style={styles.premiumButtonText}>Start Free Trial</Text>
             </TouchableOpacity>
           </Card>
@@ -358,6 +449,17 @@ const styles = StyleSheet.create({
   premiumButtonText: {
     color: '#1a1a1a',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disabledActivity: {
+    opacity: 0.5,
+  },
+  disabledActivityText: {
+    color: '#666',
+  },
+  comingSoonText: {
+    color: '#FFD700',
+    fontSize: 10,
     fontWeight: 'bold',
   },
 });
