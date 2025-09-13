@@ -3,6 +3,18 @@ import { combine } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpcClient } from '@/lib/trpc';
 
+// Database types
+interface DbCheckIn {
+  id: string;
+  user_id: string;
+  slot: 'morning' | 'afternoon' | 'evening' | 'night';
+  mood: number;
+  stress: number;
+  energy: number;
+  note: string | null;
+  created_at: string;
+}
+
 export interface CheckIn {
   id: string;
   userId?: string;
@@ -75,15 +87,16 @@ export const useCheckInStore = create(
           });
 
           // Convert database format to local format
+          const dbCheckIn = savedCheckIn as DbCheckIn;
           const newCheckIn: CheckIn = {
-            id: savedCheckIn.id,
-            userId: savedCheckIn.user_id || undefined,
-            slot: savedCheckIn.slot,
-            mood: savedCheckIn.mood,
-            stress: savedCheckIn.stress,
-            energy: savedCheckIn.energy,
-            note: savedCheckIn.note || undefined,
-            timestampISO: savedCheckIn.created_at,
+            id: dbCheckIn.id,
+            userId: dbCheckIn.user_id || undefined,
+            slot: dbCheckIn.slot,
+            mood: dbCheckIn.mood,
+            stress: dbCheckIn.stress,
+            energy: dbCheckIn.energy,
+            note: dbCheckIn.note || undefined,
+            timestampISO: dbCheckIn.created_at,
           };
           
           const checkIns = [...get().checkIns, newCheckIn];
@@ -106,7 +119,7 @@ export const useCheckInStore = create(
           const dbCheckIns = await trpcClient.checkins.get.query();
           
           // Convert database format to local format
-          const checkIns: CheckIn[] = dbCheckIns.map(dbCheckIn => ({
+          const checkIns: CheckIn[] = (dbCheckIns as DbCheckIn[]).map(dbCheckIn => ({
             id: dbCheckIn.id,
             userId: dbCheckIn.user_id || undefined,
             slot: dbCheckIn.slot,
