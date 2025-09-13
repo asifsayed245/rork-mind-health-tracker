@@ -18,7 +18,9 @@ import {
   HelpCircle,
   ChevronRight,
   User,
+  LogOut,
 } from 'lucide-react-native';
+import { useAuth } from '@/stores/authStore';
 import { useUserStore } from '@/stores/userStore';
 import Card from '@/components/Card';
 
@@ -34,6 +36,7 @@ interface SettingItem {
 }
 
 export default function SettingsScreen() {
+  const { signOut } = useAuth();
   const { profile, updateProfile } = useUserStore();
 
   const handleNotificationToggle = useCallback((value: boolean) => {
@@ -79,6 +82,21 @@ export default function SettingsScreen() {
       [{ text: 'OK' }]
     );
   }, []);
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: () => signOut()
+        }
+      ]
+    );
+  }, [signOut]);
 
   const settingSections = [
     {
@@ -176,6 +194,19 @@ export default function SettingsScreen() {
           icon: <HelpCircle color="#f87171" size={20} />,
           type: 'action' as const,
           onPress: handleCrisisResources,
+        },
+      ],
+    },
+    {
+      title: 'Account Actions',
+      items: [
+        {
+          id: 'signout',
+          title: 'Sign Out',
+          subtitle: 'Sign out of your account',
+          icon: <LogOut color="#f87171" size={20} />,
+          type: 'action' as const,
+          onPress: handleSignOut,
         },
       ],
     },

@@ -7,8 +7,10 @@ interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signInAnonymously: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
+  signUpWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  isAuthenticated: boolean;
 }
 
 export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
@@ -41,13 +43,35 @@ export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signInAnonymously = useCallback(async () => {
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        console.error('Error signing in:', error);
+        return { error: error.message };
+      }
+      return {};
     } catch (error) {
-      console.error('Error signing in anonymously:', error);
+      console.error('Error signing in:', error);
+      return { error: 'An unexpected error occurred' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const signUpWithEmail = useCallback(async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        console.error('Error signing up:', error);
+        return { error: error.message };
+      }
+      return {};
+    } catch (error) {
+      console.error('Error signing up:', error);
+      return { error: 'An unexpected error occurred' };
     } finally {
       setLoading(false);
     }
@@ -69,7 +93,9 @@ export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
     user,
     session,
     loading,
-    signInAnonymously,
+    signInWithEmail,
+    signUpWithEmail,
     signOut,
-  }), [user, session, loading, signInAnonymously, signOut]);
+    isAuthenticated: !!user,
+  }), [user, session, loading, signInWithEmail, signUpWithEmail, signOut]);
 });

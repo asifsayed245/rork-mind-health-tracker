@@ -32,6 +32,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -43,13 +44,7 @@ function RootLayoutNav() {
 }
 
 function AuthenticatedApp() {
-  const { user, loading, signInAnonymously } = useAuth();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      signInAnonymously();
-    }
-  }, [loading, user, signInAnonymously]);
+  const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
     return (
