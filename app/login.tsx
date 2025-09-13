@@ -97,7 +97,7 @@ export default function LoginScreen() {
 
   React.useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/home');
     }
   }, [isAuthenticated]);
 
