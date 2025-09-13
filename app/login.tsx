@@ -87,6 +87,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  demoButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  demoButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 export default function LoginScreen() {
@@ -117,10 +131,47 @@ export default function LoginScreen() {
       : await signInWithEmail(email.trim(), password);
 
     if (result.error) {
-      Alert.alert('Error', result.error);
+      if (result.error.includes('Invalid login credentials')) {
+        Alert.alert(
+          'Account Not Found', 
+          'No account found with these credentials. Would you like to create a new account?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Sign Up', onPress: () => setIsSignUp(true) }
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error);
+      }
     } else if (isSignUp) {
-      Alert.alert('Success', 'Account created! Please check your email to verify your account.');
+      Alert.alert('Success', 'Account created successfully! You can now sign in.');
       setIsSignUp(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    const demoEmail = 'demo@mindfulcheckin.com';
+    const demoPassword = 'demo123456';
+    
+    // Try to sign in first
+    let result = await signInWithEmail(demoEmail, demoPassword);
+    
+    // If login fails, create the demo account
+    if (result.error) {
+      console.log('Demo account not found, creating...');
+      result = await signUpWithEmail(demoEmail, demoPassword);
+      
+      if (!result.error) {
+        // Now try to sign in with the demo account
+        setTimeout(async () => {
+          const loginResult = await signInWithEmail(demoEmail, demoPassword);
+          if (loginResult.error) {
+            Alert.alert('Demo Account', 'Demo account created! Please try signing in again.');
+          }
+        }, 1000);
+      } else {
+        Alert.alert('Error', 'Failed to create demo account: ' + result.error);
+      }
     }
   };
 
@@ -171,6 +222,16 @@ export default function LoginScreen() {
           >
             <Text style={styles.buttonText}>
               {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.demoButton, loading && styles.buttonDisabled]}
+            onPress={handleDemoLogin}
+            disabled={loading}
+          >
+            <Text style={styles.demoButtonText}>
+              Try Demo Account
             </Text>
           </TouchableOpacity>
 
