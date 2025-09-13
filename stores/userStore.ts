@@ -12,6 +12,10 @@ export interface UserProfile {
   biometricLockEnabled: boolean;
   theme: 'dark' | 'light';
   createdAt: string;
+  totalCheckIns: number;
+  currentStreak: number;
+  totalJournalEntries: number;
+  totalActivitySessions: number;
 }
 
 
@@ -55,6 +59,10 @@ export const useUserStore = create(
               biometricLockEnabled: false,
               theme: 'dark',
               createdAt: new Date().toISOString(),
+              totalCheckIns: 0,
+              currentStreak: 0,
+              totalJournalEntries: 0,
+              totalActivitySessions: 0,
             };
             set({ profile: defaultProfile, isLoading: false });
             await AsyncStorage.setItem('userProfile', JSON.stringify(defaultProfile));

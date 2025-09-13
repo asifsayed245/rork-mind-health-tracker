@@ -20,6 +20,7 @@ import {
   User,
   LogOut,
 } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { useAuth } from '@/stores/authStore';
 import { useUserStore } from '@/stores/userStore';
 import Card from '@/components/Card';
@@ -108,6 +109,7 @@ export default function SettingsScreen() {
           subtitle: profile?.name || 'User',
           icon: <User color="#FFD700" size={20} />,
           type: 'navigation' as const,
+          onPress: () => router.push('/profile'),
         },
         {
           id: 'subscription',

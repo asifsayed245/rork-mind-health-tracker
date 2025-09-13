@@ -20,7 +20,7 @@ import CheckInProgress from '@/components/CheckInProgress';
 import QuickCheckInModal from '@/components/QuickCheckInModal';
 
 export default function HomeScreen() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { profile, loadProfile } = useUserStore();
   const { 
     todayCheckIns, 
@@ -122,7 +122,9 @@ export default function HomeScreen() {
           <View style={styles.header}>
             <View>
               <Text style={styles.greeting}>Welcome back,</Text>
-              <Text style={styles.name}>{profile?.name || 'User'}</Text>
+              <Text style={styles.name}>
+                {profile?.name || user?.email?.split('@')[0] || 'User'}
+              </Text>
             </View>
             <View style={styles.streakContainer}>
               <ProgressRing
