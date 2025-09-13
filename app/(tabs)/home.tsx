@@ -98,7 +98,8 @@ export default function HomeScreen() {
 
 
   const streak = getStreak();
-  const dailyScore = getDailyScore();
+  const dailyWellnessScore = getDailyScore();
+  const completionPercentage = Math.round((todayCheckIns.length / 4) * 100);
   const today = new Date().toISOString().split('T')[0];
   const todayEntries = entries.filter(
     entry => entry.date === today
@@ -146,11 +147,11 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Daily Check-in Score Card */}
+          {/* Daily Wellness Score Card */}
           <Card style={styles.scoreCard}>
             <View style={styles.scoreHeader}>
               <View>
-                <Text style={styles.scoreTitle}>Daily Check-in Score</Text>
+                <Text style={styles.scoreTitle}>Daily Wellness Score</Text>
                 <Text style={styles.scoreSubtitle}>
                   based on today's check-ins
                 </Text>
@@ -158,13 +159,13 @@ export default function HomeScreen() {
               <ProgressRing
                 size={60}
                 strokeWidth={4}
-                progress={dailyScore}
-                color="#FFFFFF"
-                trackColor="rgba(255,255,255,0.24)"
+                progress={dailyWellnessScore}
+                color="#000000"
+                trackColor="rgba(0,0,0,0.24)"
               />
             </View>
             <View style={styles.scoreCenter}>
-              <Text style={styles.scoreCenterNumber}>{dailyScore}%</Text>
+              <Text style={styles.scoreCenterNumber}>{dailyWellnessScore}%</Text>
             </View>
           </Card>
 
@@ -207,8 +208,8 @@ export default function HomeScreen() {
             <Text style={styles.cardTitle}>Today&apos;s Summary</Text>
             <View style={styles.previewStats}>
               <View style={styles.stat}>
-                <Text style={styles.statNumber}>{dailyScore}%</Text>
-                <Text style={styles.statLabel}>Daily Check-in Score</Text>
+                <Text style={styles.statNumber}>{completionPercentage}%</Text>
+                <Text style={styles.statLabel}>Daily Check-in Completed</Text>
               </View>
               <View style={styles.stat}>
                 <Text style={styles.statNumber}>{todayEntries}</Text>
