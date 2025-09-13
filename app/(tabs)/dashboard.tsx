@@ -16,6 +16,7 @@ import { useJournalStore } from '@/stores/journalStore';
 import Card from '@/components/Card';
 import ProgressRing from '@/components/ProgressRing';
 
+
 const { width } = Dimensions.get('window');
 
 type Period = 'Week' | 'Month' | 'Year';
@@ -25,7 +26,9 @@ export default function DashboardScreen() {
     checkIns, 
     loadCheckIns, 
     loadUserSettings,
-    getDailyAggregates 
+    getDailyAggregates,
+    userSettings,
+    getWellbeingScoreForPeriod
   } = useCheckInStore();
   const { profile } = useUserStore();
   const { entries } = useJournalStore();
@@ -91,9 +94,7 @@ export default function DashboardScreen() {
   };
 
   const chartData = getChartData();
-  const wellbeingScore = Math.round(
-    chartData.moodData.reduce((sum, mood) => sum + mood, 0) / chartData.moodData.length * 20
-  ) || 0;
+  const wellbeingScore = getWellbeingScoreForPeriod(selectedPeriod);
 
   const gratitudeStreak = entries.filter(entry => 
     entry.type === 'gratitude' && 

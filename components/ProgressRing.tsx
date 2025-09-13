@@ -8,6 +8,7 @@ interface ProgressRingProps {
   progress: number;
   color: string;
   backgroundColor?: string;
+  trackColor?: string;
 }
 
 export default function ProgressRing({
@@ -16,6 +17,7 @@ export default function ProgressRing({
   progress,
   color,
   backgroundColor = '#333',
+  trackColor,
 }: ProgressRingProps) {
   const animatedValue = useRef(new Animated.Value(0)).current;
   const radius = (size - strokeWidth) / 2;
@@ -41,7 +43,7 @@ export default function ProgressRing({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={backgroundColor}
+            stroke={trackColor || backgroundColor}
             strokeWidth={strokeWidth}
             fill="transparent"
           />
@@ -75,7 +77,7 @@ export default function ProgressRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={backgroundColor}
+          stroke={trackColor || backgroundColor}
           strokeWidth={strokeWidth}
           fill="transparent"
         />

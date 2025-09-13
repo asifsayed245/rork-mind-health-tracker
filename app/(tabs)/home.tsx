@@ -140,21 +140,25 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Daily Score Card */}
+          {/* Daily Check-in Score Card */}
           <Card style={styles.scoreCard}>
             <View style={styles.scoreHeader}>
               <View>
-                <Text style={styles.scoreTitle}>Daily Score</Text>
+                <Text style={styles.scoreTitle}>Daily Check-in Score</Text>
                 <Text style={styles.scoreSubtitle}>
-                  {dailyScore}% completed
+                  based on today's check-ins
                 </Text>
               </View>
               <ProgressRing
                 size={60}
                 strokeWidth={4}
                 progress={dailyScore}
-                color="#FFD700"
+                color="#FFFFFF"
+                trackColor="rgba(255,255,255,0.24)"
               />
+            </View>
+            <View style={styles.scoreCenter}>
+              <Text style={styles.scoreCenterNumber}>{dailyScore}%</Text>
             </View>
           </Card>
 
@@ -198,7 +202,7 @@ export default function HomeScreen() {
             <View style={styles.previewStats}>
               <View style={styles.stat}>
                 <Text style={styles.statNumber}>{dailyScore}%</Text>
-                <Text style={styles.statLabel}>Daily Score</Text>
+                <Text style={styles.statLabel}>Daily Check-in Score</Text>
               </View>
               <View style={styles.stat}>
                 <Text style={styles.statNumber}>{todayEntries}</Text>
@@ -324,6 +328,7 @@ const styles = StyleSheet.create({
   scoreCard: {
     backgroundColor: '#FFD700',
     marginBottom: 16,
+    position: 'relative',
   },
   scoreHeader: {
     flexDirection: 'row',
@@ -339,6 +344,20 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 14,
     marginTop: 4,
+  },
+  scoreCenter: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scoreCenterNumber: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   checkInCard: {
     marginBottom: 16,

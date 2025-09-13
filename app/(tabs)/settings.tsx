@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -19,11 +21,15 @@ import {
   ChevronRight,
   User,
   LogOut,
+  Settings as SettingsIcon,
+  X,
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/stores/authStore';
 import { useUserStore } from '@/stores/userStore';
+import { useCheckInStore } from '@/stores/checkInStore';
 import Card from '@/components/Card';
+import { normalizeWeights, ScoringWeights } from '@/lib/scoring';
 
 interface SettingItem {
   id: string;
@@ -39,6 +45,15 @@ interface SettingItem {
 export default function SettingsScreen() {
   const { signOut } = useAuth();
   const { profile, updateProfile } = useUserStore();
+  const { userSettings, updateUserSettings } = useCheckInStore();
+  const [showScoringModal, setShowScoringModal] = useState(false);
+  const [tempWeights, setTempWeights] = useState<ScoringWeights>({
+    moodWeight: 0.50,
+    energyWeight: 0.30,
+    stressWeight: 0.20,
+  });
+  const [tempUseCompletion, setTempUseCompletion] = useState(true);
+  const [tempExcludeEmpty, setTempExcludeEmpty] = useState(true);
 
   const handleNotificationToggle = useCallback((value: boolean) => {
     updateProfile({ notificationsEnabled: value });
@@ -79,7 +94,7 @@ export default function SettingsScreen() {
   const handleCrisisResources = useCallback(() => {
     Alert.alert(
       'Crisis Resources',
-      'If you\'re experiencing a mental health crisis, please contact:\n\n• National Suicide Prevention Lifeline: 988\n• Crisis Text Line: Text HOME to 741741\n• Emergency Services: 911',
+      'If you are experiencing a mental health crisis, please contact:\n\n• National Suicide Prevention Lifeline: 988\n• Crisis Text Line: Text HOME to 741741\n• Emergency Services: 911',
       [{ text: 'OK' }]
     );
   }, []);
@@ -98,6 +113,30 @@ export default function SettingsScreen() {
       ]
     );
   }, [signOut]);
+
+  const handleScoringSettings = useCallback(() => {
+    if (userSettings) {
+      setTempWeights(userSettings.scoring.weights);
+      setTempUseCompletion(userSettings.scoring.useCompletionMultiplier);
+      setTempExcludeEmpty(userSettings.scoring.excludeEmptyDays);
+      setShowScoringModal(true);
+    }
+  }, [userSettings]);
+
+  const handleSaveScoringSettings = useCallback(async () => {
+    if (userSettings) {
+      const normalizedWeights = normalizeWeights(tempWeights);
+      await updateUserSettings({
+        scoring: {
+          weights: normalizedWeights,
+          useCompletionMultiplier: tempUseCompletion,
+          excludeEmptyDays: tempExcludeEmpty,
+        }
+      });
+      setShowScoringModal(false);
+      Alert.alert('Settings Saved', 'Your scoring preferences have been updated.');
+    }
+  }, [userSettings, tempWeights, tempUseCompletion, tempExcludeEmpty, updateUserSettings]);
 
   const settingSections = [
     {
@@ -170,6 +209,19 @@ export default function SettingsScreen() {
           type: 'action' as const,
           onPress: handleExportData,
           isPremium: true,
+        },
+      ],
+    },
+    {
+      title: 'Scoring',
+      items: [
+        {
+          id: 'scoring',
+          title: 'Scoring Settings',
+          subtitle: 'Customize wellbeing score calculation',
+          icon: <SettingsIcon color="#8b5cf6" size={20} />,
+          type: 'navigation' as const,
+          onPress: handleScoringSettings,
         },
       ],
     },
@@ -284,6 +336,117 @@ export default function SettingsScreen() {
           <Text style={styles.appInfoText}>Made with ❤️ for your wellbeing</Text>
         </View>
       </ScrollView>
+
+      {/* Scoring Settings Modal */}
+      <Modal
+        visible={showScoringModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowScoringModal(false)}
+      >
+        <View style={modalStyles.container}>
+          <View style={modalStyles.header}>
+            <Text style={modalStyles.title}>Scoring Settings</Text>
+            <TouchableOpacity
+              style={modalStyles.closeButton}
+              onPress={() => setShowScoringModal(false)}
+            >
+              <X color="#999" size={24} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={modalStyles.content}>
+            <Text style={modalStyles.sectionTitle}>Metric Weights</Text>
+            <Text style={modalStyles.sectionSubtitle}>
+              Adjust how much each metric contributes to your wellbeing score
+            </Text>
+
+            <View style={modalStyles.weightContainer}>
+              <Text style={modalStyles.weightLabel}>Mood Weight</Text>
+              <TextInput
+                style={modalStyles.weightInput}
+                value={tempWeights.moodWeight.toFixed(2)}
+                onChangeText={(text) => {
+                  const value = parseFloat(text) || 0;
+                  setTempWeights(prev => ({ ...prev, moodWeight: Math.max(0, Math.min(1, value)) }));
+                }}
+                keyboardType="numeric"
+                placeholder="0.50"
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={modalStyles.weightContainer}>
+              <Text style={modalStyles.weightLabel}>Energy Weight</Text>
+              <TextInput
+                style={modalStyles.weightInput}
+                value={tempWeights.energyWeight.toFixed(2)}
+                onChangeText={(text) => {
+                  const value = parseFloat(text) || 0;
+                  setTempWeights(prev => ({ ...prev, energyWeight: Math.max(0, Math.min(1, value)) }));
+                }}
+                keyboardType="numeric"
+                placeholder="0.30"
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={modalStyles.weightContainer}>
+              <Text style={modalStyles.weightLabel}>Stress Weight</Text>
+              <TextInput
+                style={modalStyles.weightInput}
+                value={tempWeights.stressWeight.toFixed(2)}
+                onChangeText={(text) => {
+                  const value = parseFloat(text) || 0;
+                  setTempWeights(prev => ({ ...prev, stressWeight: Math.max(0, Math.min(1, value)) }));
+                }}
+                keyboardType="numeric"
+                placeholder="0.20"
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <Text style={modalStyles.sectionTitle}>Calculation Options</Text>
+
+            <View style={modalStyles.toggleContainer}>
+              <View style={modalStyles.toggleContent}>
+                <Text style={modalStyles.toggleTitle}>Use Completion Multiplier</Text>
+                <Text style={modalStyles.toggleSubtitle}>
+                  Multiply score by completion percentage (slots filled / 4)
+                </Text>
+              </View>
+              <Switch
+                value={tempUseCompletion}
+                onValueChange={setTempUseCompletion}
+                trackColor={{ false: '#333', true: '#FFD700' }}
+                thumbColor={tempUseCompletion ? '#1a1a1a' : '#666'}
+              />
+            </View>
+
+            <View style={modalStyles.toggleContainer}>
+              <View style={modalStyles.toggleContent}>
+                <Text style={modalStyles.toggleTitle}>Exclude Empty Days</Text>
+                <Text style={modalStyles.toggleSubtitle}>
+                  Don&apos;t include days with 0 check-ins in period averages
+                </Text>
+              </View>
+              <Switch
+                value={tempExcludeEmpty}
+                onValueChange={setTempExcludeEmpty}
+                trackColor={{ false: '#333', true: '#FFD700' }}
+                thumbColor={tempExcludeEmpty ? '#1a1a1a' : '#666'}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={modalStyles.saveButton}
+              onPress={handleSaveScoringSettings}
+            >
+              <Text style={modalStyles.saveButtonText}>Save Settings</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -368,5 +531,105 @@ const styles = StyleSheet.create({
   appInfoText: {
     color: '#666',
     fontSize: 12,
+  },
+});
+
+const modalStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  title: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    color: '#999',
+    fontSize: 14,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  weightContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  weightLabel: {
+    color: '#fff',
+    fontSize: 16,
+    flex: 1,
+  },
+  weightInput: {
+    color: '#fff',
+    fontSize: 16,
+    backgroundColor: '#2a2a2a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    width: 80,
+    textAlign: 'center',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  toggleContent: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  toggleSubtitle: {
+    color: '#999',
+    fontSize: 14,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  saveButton: {
+    backgroundColor: '#FFD700',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 32,
+    marginBottom: 24,
+  },
+  saveButtonText: {
+    color: '#1a1a1a',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

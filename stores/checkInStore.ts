@@ -2,6 +2,14 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
+import { 
+  ScoringSettings, 
+  DEFAULT_SCORING_SETTINGS, 
+  computeDailyCheckinScore,
+  computePeriodWellbeingScore,
+  getDailyScoresForPeriod,
+  normalizeWeights
+} from '@/lib/scoring';
 
 // Database types
 interface DbCheckIn {
@@ -48,6 +56,7 @@ export interface UserSettings {
     minSlotsPerDay: number;
     streakDaysRequired: number;
   };
+  scoring: ScoringSettings;
   lastHeavyCardShownAt?: string;
   lastHeavyCardDismissedAt?: string;
 }
@@ -349,8 +358,13 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
   }, [checkIns]);
   
   const getDailyScore = useCallback(() => {
-    return Math.round((todayCheckIns.length / 4) * 100);
-  }, [todayCheckIns]);
+    if (!userSettings) return 0;
+    return computeDailyCheckinScore(
+      todayCheckIns,
+      userSettings.scoring.weights,
+      userSettings.scoring.useCompletionMultiplier
+    );
+  }, [todayCheckIns, userSettings]);
   
   const getStreak = useCallback(() => {
     const now = new Date();
@@ -399,6 +413,10 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
       const stored = await AsyncStorage.getItem('userSettings');
       if (stored) {
         const settings = JSON.parse(stored);
+        // Migrate old settings to include scoring if missing
+        if (!settings.scoring) {
+          settings.scoring = DEFAULT_SCORING_SETTINGS;
+        }
         setUserSettings(settings);
       } else {
         const defaultSettings: UserSettings = {
@@ -414,6 +432,7 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
             minSlotsPerDay: 2,
             streakDaysRequired: 3,
           },
+          scoring: DEFAULT_SCORING_SETTINGS,
         };
         setUserSettings(defaultSettings);
         await AsyncStorage.setItem('userSettings', JSON.stringify(defaultSettings));
@@ -462,6 +481,45 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
     }
   }, []);
 
+  const getWellbeingScoreForPeriod = useCallback((period: 'Week' | 'Month' | 'Year') => {
+    if (!userSettings) return 0;
+    
+    const now = new Date();
+    let startDate: string;
+    let endDate: string;
+    
+    switch (period) {
+      case 'Week':
+        const weekAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+        startDate = weekAgo.toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
+        break;
+      case 'Month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
+        break;
+      case 'Year':
+        startDate = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+        endDate = now.toISOString().split('T')[0];
+        break;
+      default:
+        return 0;
+    }
+    
+    const dailyScores = getDailyScoresForPeriod(
+      checkIns,
+      startDate,
+      endDate,
+      userSettings.scoring.weights,
+      userSettings.scoring.useCompletionMultiplier
+    );
+    
+    return computePeriodWellbeingScore(
+      dailyScores,
+      userSettings.scoring.excludeEmptyDays
+    );
+  }, [checkIns, userSettings]);
+
   return useMemo(() => ({
     checkIns,
     todayCheckIns,
@@ -487,6 +545,7 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
     updateUserSettings,
     loadActivitySessions,
     clearAllData,
+    getWellbeingScoreForPeriod,
   }), [
     checkIns,
     todayCheckIns,
@@ -512,5 +571,6 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
     updateUserSettings,
     loadActivitySessions,
     clearAllData,
+    getWellbeingScoreForPeriod,
   ]);
 });
