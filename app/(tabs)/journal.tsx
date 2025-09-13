@@ -48,32 +48,44 @@ export default function JournalScreen() {
   }, [entries, getEntryCounts]);
 
   const handleSaveEntry = useCallback(async () => {
-    if (!title.trim() || !content.trim()) return;
-    
-    if (isEditing && selectedEntry) {
-      await updateEntry(selectedEntry.id, {
-        type: selectedType,
-        title: title.trim(),
-        content: content.trim(),
-        mood,
-        tags: [],
-      });
-    } else {
-      await addEntry({
-        type: selectedType,
-        title: title.trim(),
-        content: content.trim(),
-        mood,
-        tags: [],
-      });
+    if (!title.trim() || !content.trim()) {
+      Alert.alert('Missing Information', 'Please provide both a title and content for your entry.');
+      return;
     }
     
-    setShowModal(false);
-    setIsEditing(false);
-    setSelectedEntry(null);
-    setTitle('');
-    setContent('');
-    setMood(3);
+    try {
+      if (isEditing && selectedEntry) {
+        await updateEntry(selectedEntry.id, {
+          type: selectedType,
+          title: title.trim(),
+          content: content.trim(),
+          mood,
+          tags: [],
+        });
+      } else {
+        await addEntry({
+          type: selectedType,
+          title: title.trim(),
+          content: content.trim(),
+          mood,
+          tags: [],
+        });
+      }
+      
+      setShowModal(false);
+      setIsEditing(false);
+      setSelectedEntry(null);
+      setTitle('');
+      setContent('');
+      setMood(3);
+    } catch (error) {
+      console.error('Error saving entry:', error);
+      Alert.alert(
+        'Save Failed', 
+        'Failed to save your journal entry. Please check your connection and try again.',
+        [{ text: 'OK' }]
+      );
+    }
   }, [addEntry, updateEntry, selectedEntry, isEditing, selectedType, title, content, mood]);
 
   const filteredEntries = entries.filter(entry => {

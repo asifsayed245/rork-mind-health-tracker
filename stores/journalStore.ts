@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { combine } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { trpcClient } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
 
 export interface JournalEntry {
   id: string;
@@ -31,16 +31,32 @@ export const useJournalStore = create(
     (set, get) => ({
       addEntry: async (entryData: Omit<JournalEntry, 'id' | 'timestamp' | 'date'>) => {
         try {
-          // Save to database via tRPC
-          const savedEntry = await trpcClient.journal.add.mutate({
-            type: entryData.type,
-            title: entryData.title,
-            content: entryData.content,
-            mood: entryData.mood,
-            tags: entryData.tags,
-            audioUri: entryData.audioUri,
-            meta: entryData.meta,
-          });
+          // Get current user session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) {
+            throw new Error('User not authenticated');
+          }
+
+          // Save to database directly via Supabase
+          const { data: savedEntry, error } = await supabase
+            .from('journal_entries')
+            .insert({
+              user_id: session.user.id,
+              type: entryData.type,
+              title: entryData.title,
+              content: entryData.content,
+              mood: entryData.mood,
+              tags: entryData.tags || [],
+              audio_uri: entryData.audioUri || null,
+              meta: entryData.meta || null,
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Database error:', error);
+            throw new Error(`Failed to save journal entry: ${error.message}`);
+          }
 
           // Convert database format to local format
           const newEntry: JournalEntry = {
@@ -69,11 +85,38 @@ export const useJournalStore = create(
       
       loadEntries: async () => {
         try {
+          // Get current user session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) {
+            console.log('No authenticated user, loading from AsyncStorage only');
+            // Fallback to AsyncStorage
+            try {
+              const stored = await AsyncStorage.getItem('journalEntries');
+              const entries = stored ? JSON.parse(stored) : [];
+              set({ entries: entries.sort((a: JournalEntry, b: JournalEntry) => 
+                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+              ), isLoading: false });
+            } catch (asyncError) {
+              console.error('Failed to load journal entries from AsyncStorage:', asyncError);
+              set({ isLoading: false });
+            }
+            return;
+          }
+
           // Try to load from database first
-          const dbEntries = await trpcClient.journal.get.query();
+          const { data: dbEntries, error } = await supabase
+            .from('journal_entries')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false });
+
+          if (error) {
+            console.error('Database error:', error);
+            throw error;
+          }
           
           // Convert database format to local format
-          const entries: JournalEntry[] = dbEntries.map(dbEntry => ({
+          const entries: JournalEntry[] = (dbEntries || []).map(dbEntry => ({
             id: dbEntry.id,
             type: dbEntry.type,
             title: dbEntry.title,
@@ -115,26 +158,72 @@ export const useJournalStore = create(
       },
       
       updateEntry: async (id: string, updates: Partial<Omit<JournalEntry, 'id' | 'timestamp' | 'date'>>) => {
-        const entries = get().entries.map(entry => 
-          entry.id === id ? { ...entry, ...updates } : entry
-        );
-        set({ entries });
-        
         try {
+          // Get current user session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            // Update in database
+            const { error } = await supabase
+              .from('journal_entries')
+              .update({
+                type: updates.type,
+                title: updates.title,
+                content: updates.content,
+                mood: updates.mood,
+                tags: updates.tags,
+                audio_uri: updates.audioUri,
+                meta: updates.meta,
+              })
+              .eq('id', id)
+              .eq('user_id', session.user.id);
+
+            if (error) {
+              console.error('Database error:', error);
+              throw error;
+            }
+          }
+
+          // Update local state
+          const entries = get().entries.map(entry => 
+            entry.id === id ? { ...entry, ...updates } : entry
+          );
+          set({ entries });
+          
+          // Update AsyncStorage
           await AsyncStorage.setItem('journalEntries', JSON.stringify(entries));
         } catch (error) {
           console.error('Failed to update journal entry:', error);
+          throw error;
         }
       },
       
       deleteEntry: async (id: string) => {
-        const entries = get().entries.filter(entry => entry.id !== id);
-        set({ entries });
-        
         try {
+          // Get current user session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            // Delete from database
+            const { error } = await supabase
+              .from('journal_entries')
+              .delete()
+              .eq('id', id)
+              .eq('user_id', session.user.id);
+
+            if (error) {
+              console.error('Database error:', error);
+              throw error;
+            }
+          }
+
+          // Update local state
+          const entries = get().entries.filter(entry => entry.id !== id);
+          set({ entries });
+          
+          // Update AsyncStorage
           await AsyncStorage.setItem('journalEntries', JSON.stringify(entries));
         } catch (error) {
           console.error('Failed to delete journal entry:', error);
+          throw error;
         }
       },
       
