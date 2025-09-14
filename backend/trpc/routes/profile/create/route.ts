@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { protectedProcedure } from '@/backend/trpc/create-context';
-import type { Database } from '@/lib/supabase';
 
 const createProfileSchema = z.object({
   fullName: z.string().min(2).max(100),
@@ -23,30 +22,35 @@ export const createProfileProcedure = protectedProcedure
     // Auto-detect timezone if not provided
     const timezone = input.timezone || 'UTC';
     
-    const profileData: Database['public']['Tables']['user_profiles']['Insert'] = {
+    const profileData = {
       user_id: user.id,
       full_name: input.fullName,
       age: input.age,
-      gender: input.gender || 'Prefer not to say',
+      gender: (input.gender || 'Prefer not to say') as 'Male' | 'Female' | 'Other' | 'Prefer not to say',
       weight: input.weight || null,
       occupation: input.occupation || null,
       timezone,
-      weight_unit: input.weightUnit || 'kg',
+      weight_unit: (input.weightUnit || 'kg') as 'kg' | 'lbs',
     };
     
     console.log('Inserting profile data:', profileData);
     
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .insert(profileData)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating user profile:', error);
-      throw new Error(`Failed to create user profile: ${error.message}`);
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .insert(profileData as any)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating user profile:', error);
+        throw new Error(`Failed to create user profile: ${error.message}`);
+      }
+      
+      console.log('Profile created successfully:', data);
+      return data;
+    } catch (err) {
+      console.error('Unexpected error creating profile:', err);
+      throw new Error('Failed to create user profile');
     }
-    
-    console.log('Profile created successfully:', data);
-    return data;
   });

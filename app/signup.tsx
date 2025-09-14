@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/stores/authStore';
+import { useUserProfile } from '@/stores/userProfileStore';
 import { router } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -237,6 +238,7 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState<boolean>(false);
   
   const { signUpWithEmail, isAuthenticated } = useAuth();
+  const { refetch: refetchProfile } = useUserProfile();
   const createProfileMutation = trpc.profile.create.useMutation();
 
   React.useEffect(() => {
@@ -365,6 +367,10 @@ export default function SignupScreen() {
       if (!profileCreated) {
         throw lastError || new Error('Failed to create profile after multiple attempts');
       }
+      
+      // Refresh the profile in the store
+      console.log('Profile created successfully, refreshing profile store...');
+      refetchProfile();
       
       Alert.alert(
         'Success!', 
