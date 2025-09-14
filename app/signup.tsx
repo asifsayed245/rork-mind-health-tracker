@@ -258,8 +258,8 @@ export default function SignupScreen() {
       newErrors.password = 'Password is required';
     } else if (signupData.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
-    } else if (!/(?=.*[0-9])(?=.*[!@#$%^&*])/.test(signupData.password)) {
-      newErrors.password = 'Password must contain at least 1 number or symbol';
+    } else if (!/(?=.*[0-9])/.test(signupData.password)) {
+      newErrors.password = 'Password must contain at least 1 number';
     }
     
     setErrors(newErrors);
@@ -423,7 +423,7 @@ export default function SignupScreen() {
         />
         {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
         <Text style={styles.optionalText}>
-          Must be at least 8 characters with 1 number or symbol
+          Must be at least 8 characters with 1 number
         </Text>
       </View>
     </>

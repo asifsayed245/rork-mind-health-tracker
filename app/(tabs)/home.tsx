@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Heart, Wind, MessageCircle, X } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/stores/authStore';
-import { useUserStore } from '@/stores/userStore';
+import { useUserProfile } from '@/stores/userProfileStore';
 import { useCheckInStore, CheckIn } from '@/stores/checkInStore';
 import { useJournalStore } from '@/stores/journalStore';
 import Card from '@/components/Card';
@@ -22,7 +22,7 @@ import QuickCheckInModal from '@/components/QuickCheckInModal';
 
 export default function HomeScreen() {
   const { isAuthenticated, user } = useAuth();
-  const { profile, loadProfile } = useUserStore();
+  const { profile, fetchProfile } = useUserProfile();
   const { 
     todayCheckIns, 
     loadCheckIns, 
@@ -66,7 +66,7 @@ export default function HomeScreen() {
     const initializeData = async () => {
       try {
         await Promise.all([
-          loadProfile(),
+          fetchProfile(),
           loadActivitySessions(),
           loadUserSettings(),
         ]);
@@ -195,7 +195,7 @@ export default function HomeScreen() {
             <View>
               <Text style={styles.greeting}>Welcome back,</Text>
               <Text style={styles.name}>
-                {profile?.name || user?.email?.split('@')[0] || 'User'}
+                {profile?.full_name || user?.email?.split('@')[0] || 'User'}
               </Text>
             </View>
             <View style={styles.streakContainer}>

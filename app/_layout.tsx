@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { AuthProvider, useAuth } from "@/stores/authStore";
 import { CheckInProvider } from "@/stores/checkInStore";
 import { JournalProvider } from "@/stores/journalStore";
+import { UserProfileProvider } from "@/stores/userProfileStore";
 
 
 SplashScreen.preventAutoHideAsync();
@@ -105,11 +106,13 @@ function AuthenticatedApp() {
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <CheckInProvider>
-        <JournalProvider>
-          <RootLayoutNav />
-        </JournalProvider>
-      </CheckInProvider>
+      <UserProfileProvider>
+        <CheckInProvider>
+          <JournalProvider>
+            <RootLayoutNav />
+          </JournalProvider>
+        </CheckInProvider>
+      </UserProfileProvider>
     </trpc.Provider>
   );
 }
