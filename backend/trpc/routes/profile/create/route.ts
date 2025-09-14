@@ -17,8 +17,11 @@ export const createProfileProcedure = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     const { supabase, user } = ctx;
     
+    console.log('Creating profile for user:', user.id);
+    console.log('Profile data:', input);
+    
     // Auto-detect timezone if not provided
-    const timezone = input.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timezone = input.timezone || 'UTC';
     
     const profileData: Database['public']['Tables']['user_profiles']['Insert'] = {
       user_id: user.id,
@@ -31,6 +34,8 @@ export const createProfileProcedure = protectedProcedure
       weight_unit: input.weightUnit || 'kg',
     };
     
+    console.log('Inserting profile data:', profileData);
+    
     const { data, error } = await supabase
       .from('user_profiles')
       .insert(profileData as any)
@@ -39,8 +44,9 @@ export const createProfileProcedure = protectedProcedure
     
     if (error) {
       console.error('Error creating user profile:', error);
-      throw new Error('Failed to create user profile');
+      throw new Error(`Failed to create user profile: ${error.message}`);
     }
     
+    console.log('Profile created successfully:', data);
     return data;
   });

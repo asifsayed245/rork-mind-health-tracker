@@ -26,8 +26,10 @@ const createTRPCClient = () => {
         headers: async () => {
           try {
             const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            console.log('tRPC headers - session exists:', !!session, 'token exists:', !!token);
             return {
-              authorization: session?.access_token ? `Bearer ${session.access_token}` : '',
+              authorization: token ? `Bearer ${token}` : '',
             };
           } catch (error) {
             console.error('Error getting session for tRPC headers:', error);

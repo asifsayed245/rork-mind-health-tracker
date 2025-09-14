@@ -319,6 +319,7 @@ export default function SignupScreen() {
     setLoading(true);
     try {
       // Step 1: Create auth account
+      console.log('Creating auth account...');
       const authResult = await signUpWithEmail(signupData.email.trim(), signupData.password);
       
       if (authResult.error) {
@@ -326,7 +327,9 @@ export default function SignupScreen() {
         return;
       }
       
-      // Step 2: Create user profile
+      console.log('Auth account created, waiting for session...');
+      
+      // Step 2: Create user profile with retry mechanism
       const profileData = {
         fullName: signupData.fullName.trim(),
         age: parseInt(signupData.age),
@@ -337,7 +340,31 @@ export default function SignupScreen() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
       
-      await createProfileMutation.mutateAsync(profileData);
+      console.log('Creating user profile with data:', profileData);
+      
+      // Retry profile creation up to 3 times with increasing delays
+      let profileCreated = false;
+      let lastError = null;
+      
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`Profile creation attempt ${attempt}`);
+          await createProfileMutation.mutateAsync(profileData);
+          profileCreated = true;
+          break;
+        } catch (error) {
+          console.error(`Profile creation attempt ${attempt} failed:`, error);
+          lastError = error;
+          if (attempt < 3) {
+            // Wait before retrying (1s, 2s, then give up)
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          }
+        }
+      }
+      
+      if (!profileCreated) {
+        throw lastError || new Error('Failed to create profile after multiple attempts');
+      }
       
       Alert.alert(
         'Success!', 
@@ -347,7 +374,7 @@ export default function SignupScreen() {
       
     } catch (error) {
       console.error('Signup error:', error);
-      Alert.alert('Error', 'Failed to create your profile. Please try again.');
+      Alert.alert('Error', `Failed to create your profile: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setLoading(false);
     }

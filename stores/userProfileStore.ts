@@ -53,7 +53,7 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
     }
   }, [profile, fetchProfile]);
 
-  const hasProfile = profile !== null;
+  const hasProfile = useMemo(() => profile !== null, [profile]);
 
   return useMemo(() => ({
     profile,
