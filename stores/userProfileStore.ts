@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useCallback, useMemo } from 'react';
-import { trpc } from '@/lib/trpc';
+import { trpcClient } from '@/lib/trpc';
 import type { UserProfileRow } from '@/lib/supabase';
 
 interface UserProfileState {
@@ -17,21 +17,12 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getProfileQuery = trpc.profile.get.useQuery({
-    enabled: false, // We'll manually trigger this
-    retry: false,
-  });
-
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const profileData = await getProfileQuery.refetch();
-      if (profileData.data) {
-        setProfile(profileData.data);
-      } else {
-        setProfile(null);
-      }
+      const profileData = await trpcClient.profile.get.query();
+      setProfile(profileData);
     } catch (err) {
       console.error('Error fetching profile:', err);
       setError('Failed to fetch profile');
@@ -39,7 +30,7 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
     } finally {
       setLoading(false);
     }
-  }, [getProfileQuery]);
+  }, []);
 
   const updateProfile = useCallback(async (data: Partial<UserProfileRow>) => {
     if (!profile) return;
