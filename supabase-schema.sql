@@ -30,6 +30,21 @@ CREATE TABLE IF NOT EXISTS public.journal_entries (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create user_profiles table
+CREATE TABLE IF NOT EXISTS public.user_profiles (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+    full_name VARCHAR(100) NOT NULL,
+    age INTEGER NOT NULL CHECK (age >= 13 AND age <= 120),
+    gender TEXT CHECK (gender IN ('Male', 'Female', 'Other', 'Prefer not to say')) DEFAULT 'Prefer not to say',
+    weight DECIMAL(5,2) CHECK (weight > 0),
+    occupation VARCHAR(100),
+    timezone VARCHAR(50) DEFAULT 'UTC',
+    weight_unit TEXT CHECK (weight_unit IN ('kg', 'lbs')) DEFAULT 'kg',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create user_settings table
 CREATE TABLE IF NOT EXISTS public.user_settings (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -69,10 +84,12 @@ CREATE INDEX IF NOT EXISTS idx_journal_entries_created_at ON public.journal_entr
 CREATE INDEX IF NOT EXISTS idx_journal_entries_type ON public.journal_entries(type);
 CREATE INDEX IF NOT EXISTS idx_activity_sessions_user_id ON public.activity_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_sessions_created_at ON public.activity_sessions(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON public.user_profiles(user_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.check_ins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.journal_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_sessions ENABLE ROW LEVEL SECURITY;
 
@@ -112,6 +129,25 @@ CREATE POLICY "Users can update their own journal entries" ON public.journal_ent
     FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own journal entries" ON public.journal_entries
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can delete their own profile" ON public.user_profiles;
+
+-- Create RLS policies for user_profiles
+CREATE POLICY "Users can view their own profile" ON public.user_profiles
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own profile" ON public.user_profiles
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own profile" ON public.user_profiles
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own profile" ON public.user_profiles
     FOR DELETE USING (auth.uid() = user_id);
 
 -- Drop existing policies if they exist
@@ -161,10 +197,16 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Drop existing trigger if it exists
+-- Drop existing triggers if they exist
+DROP TRIGGER IF EXISTS update_user_profiles_updated_at ON public.user_profiles;
 DROP TRIGGER IF EXISTS update_user_settings_updated_at ON public.user_settings;
 
--- Create trigger for user_settings updated_at
+-- Create triggers for updated_at
+CREATE TRIGGER update_user_profiles_updated_at 
+    BEFORE UPDATE ON public.user_profiles 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_user_settings_updated_at 
     BEFORE UPDATE ON public.user_settings 
     FOR EACH ROW 

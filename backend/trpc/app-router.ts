@@ -4,6 +4,8 @@ import { addCheckInProcedure } from "./routes/checkins/add/route";
 import { getCheckInsProcedure } from "./routes/checkins/get/route";
 import { addJournalEntryProcedure } from "./routes/journal/add/route";
 import { getJournalEntriesProcedure } from "./routes/journal/get/route";
+import { createProfileProcedure } from "./routes/profile/create/route";
+import { getProfileProcedure } from "./routes/profile/get/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -16,6 +18,10 @@ export const appRouter = createTRPCRouter({
   journal: createTRPCRouter({
     add: addJournalEntryProcedure,
     get: getJournalEntriesProcedure,
+  }),
+  profile: createTRPCRouter({
+    create: createProfileProcedure,
+    get: getProfileProcedure,
   }),
 });
 

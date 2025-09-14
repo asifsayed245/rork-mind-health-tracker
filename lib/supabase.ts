@@ -79,6 +79,47 @@ export interface Database {
           meta?: any | null;
         };
       };
+      user_profiles: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          full_name: string;
+          age: number;
+          gender: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+          weight: number | null;
+          occupation: string | null;
+          timezone: string;
+          weight_unit: 'kg' | 'lbs';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          full_name: string;
+          age: number;
+          gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+          weight?: number | null;
+          occupation?: string | null;
+          timezone?: string;
+          weight_unit?: 'kg' | 'lbs';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          full_name?: string;
+          age?: number;
+          gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+          weight?: number | null;
+          occupation?: string | null;
+          timezone?: string;
+          weight_unit?: 'kg' | 'lbs';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       user_settings: {
         Row: {
           id: string;
@@ -170,5 +211,6 @@ export interface Database {
 
 export type CheckInRow = Database['public']['Tables']['check_ins']['Row'];
 export type JournalEntryRow = Database['public']['Tables']['journal_entries']['Row'];
+export type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
 export type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
 export type ActivitySessionRow = Database['public']['Tables']['activity_sessions']['Row'];

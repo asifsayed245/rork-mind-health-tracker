@@ -13,7 +13,7 @@ export const createContext = async (opts: FetchCreateContextFnOptions) => {
   const authHeader = opts.req.headers.get('authorization');
   const token = authHeader?.replace('Bearer ', '');
   
-  // Create a Supabase client for this request
+  // Create a Supabase client for this request with proper typing
   const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,

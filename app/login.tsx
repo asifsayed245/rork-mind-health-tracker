@@ -241,7 +241,13 @@ export default function LoginScreen() {
             </Text>
             <TouchableOpacity
               style={styles.switchButton}
-              onPress={() => setIsSignUp(!isSignUp)}
+              onPress={() => {
+                if (isSignUp) {
+                  setIsSignUp(false);
+                } else {
+                  router.push('/signup');
+                }
+              }}
             >
               <Text style={styles.switchButtonText}>
                 {isSignUp ? 'Sign In' : 'Sign Up'}
