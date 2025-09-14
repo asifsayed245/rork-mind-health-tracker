@@ -1,7 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/stores/authStore';
 import { 
   ScoringSettings, 
   DEFAULT_SCORING_SETTINGS, 
