@@ -38,7 +38,7 @@ export const createProfileProcedure = protectedProcedure
     
     const { data, error } = await supabase
       .from('user_profiles')
-      .insert(profileData as any)
+      .insert(profileData)
       .select()
       .single();
     

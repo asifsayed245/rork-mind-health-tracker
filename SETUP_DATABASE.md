@@ -1,41 +1,44 @@
 # Database Setup Instructions
 
-## Step 1: Create Tables in Supabase
+## The Issue
+The error "Could not find the table 'public.user_profiles' in the schema cache" occurs because the database tables haven't been created in your Supabase project yet.
 
-1. Go to your Supabase dashboard: https://supabase.com/dashboard
-2. Navigate to your project: https://supabase.com/dashboard/project/qgsmmpgzerpovijkgncp
-3. Go to the SQL Editor (left sidebar)
-4. Copy and paste the entire content from `supabase-schema.sql` file
-5. Click "Run" to execute the SQL
+## How to Fix
 
-## Step 2: Verify Tables Created
+1. **Go to your Supabase project dashboard**
+   - Visit https://supabase.com/dashboard
+   - Select your project
 
-After running the SQL, you should see these tables in your Database > Tables section:
-- `profiles`
-- `user_settings` 
-- `check_ins`
-- `journal_entries`
-- `activity_sessions`
+2. **Open the SQL Editor**
+   - Click on "SQL Editor" in the left sidebar
+   - Click "New query"
 
-## Step 3: Test Database Connection
+3. **Run the schema**
+   - Copy the entire content from `supabase-schema.sql` file
+   - Paste it into the SQL Editor
+   - Click "Run" to execute the SQL
 
-1. Restart your development server
-2. The app should now connect successfully to the database
-3. You can test the connection by visiting: http://localhost:8081/api/test-db
+4. **Verify the tables were created**
+   - Go to "Table Editor" in the left sidebar
+   - You should see these tables:
+     - `check_ins`
+     - `journal_entries`
+     - `user_profiles` ← This is the missing table causing the error
+     - `user_settings`
+     - `activity_sessions`
 
-## Troubleshooting
+## What This Will Fix
 
-If you get errors:
-1. Make sure all SQL commands executed successfully
-2. Check that RLS (Row Level Security) policies were created
-3. Verify your environment variables are correct in `.env`
+After running the schema:
+- ✅ Signup will work properly and create user profiles
+- ✅ User's name will appear on the home screen instead of "User"
+- ✅ Profile data entered during signup will be saved
+- ✅ All profile-related features will function correctly
 
-## What the SQL Does
+## Additional Changes Made
 
-- Creates all necessary tables with proper relationships
-- Sets up Row Level Security (RLS) policies for data protection
-- Creates indexes for better performance
-- Sets up triggers for automatic timestamp updates
-- Enables UUID extension for unique identifiers
+- ✅ Removed symbol requirement from password validation (now only requires 8+ characters with 1 number)
+- ✅ Fixed TypeScript errors in the backend routes
+- ✅ Home screen already configured to show user's name from profile
 
-Once this is complete, your app should work without database connection errors.
+Once you run the SQL schema, everything should work perfectly!
