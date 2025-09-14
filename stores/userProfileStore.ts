@@ -77,6 +77,15 @@ export const [UserProfileProvider, useUserProfile] = createContextHook<UserProfi
     }
   }, [isAuthenticated, user, profile, loading, fetchProfile]);
 
+  // Clear profile when user signs out
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      console.log('User signed out, clearing profile');
+      setProfile(null);
+      setError(null);
+    }
+  }, [isAuthenticated, user]);
+
   return useMemo(() => ({
     profile,
     loading,

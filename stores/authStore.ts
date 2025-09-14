@@ -1,5 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -84,7 +86,24 @@ export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
+      // Clear local state immediately
+      setSession(null);
+      setUser(null);
+      
       console.log('Successfully signed out from Supabase');
+      
+      // Force navigation to login page
+      // Use setTimeout to ensure state updates are processed first
+      setTimeout(() => {
+        if (Platform.OS === 'web') {
+          // On web, use replace to ensure we can't go back
+          router.replace('/login');
+        } else {
+          // On mobile, the auth state change should handle navigation
+          router.replace('/login');
+        }
+      }, 100);
+      
     } catch (error) {
       console.error('Error signing out:', error);
     } finally {

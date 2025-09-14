@@ -90,10 +90,22 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated) {
+        // Force navigation to login page
+        console.log('User not authenticated, redirecting to login');
         router.replace('/login');
+      } else {
+        console.log('User authenticated, staying on current page');
       }
     }
   }, [isAuthenticated, loading]);
+
+  // Additional effect to handle immediate auth state changes
+  useEffect(() => {
+    if (!loading && !isAuthenticated && !session) {
+      console.log('Auth state cleared, forcing redirect to login');
+      router.replace('/login');
+    }
+  }, [isAuthenticated, session, loading]);
 
   if (loading) {
     return (

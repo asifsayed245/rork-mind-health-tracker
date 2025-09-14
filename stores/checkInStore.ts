@@ -78,6 +78,7 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
   const [activitySessions, setActivitySessions] = useState<ActivitySession[]>([]);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { isAuthenticated, user } = useAuth();
 
   // Use tRPC hooks
   const checkInsQuery = trpc.checkins.get.useQuery();
@@ -484,6 +485,14 @@ export const [CheckInProvider, useCheckInStore] = createContextHook(() => {
       console.error('Failed to clear check-in data:', storageError);
     }
   }, []);
+
+  // Clear data when user signs out
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      console.log('User signed out, clearing check-in data');
+      clearAllData();
+    }
+  }, [isAuthenticated, user, clearAllData]);
 
   const getWellbeingScoreForPeriod = useCallback((period: 'Week' | 'Month' | 'Year') => {
     if (!userSettings) return 0;
